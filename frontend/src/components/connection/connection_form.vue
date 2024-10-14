@@ -424,6 +424,11 @@
               private_secret: true,
               disabled_ssl_verify: true,
             },
+            'mongo_db': {
+              name: true,
+              private_secret: true,
+              private_secret_label: 'Connection URL String',
+            },
           },
           // WIP
           google_list: [
@@ -505,7 +510,6 @@
           this.success_run = false
           this.loading_test = true
           this.error = {}
-          console.log('connectionconnectionconnectionconnection', this.connection)
           axios.post('/api/walrus/v1/connection/test', {
             connection_id: parseInt(connection_id),
 

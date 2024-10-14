@@ -9,8 +9,7 @@ from shared.database.source_control.working_dir import WorkingDir
 from shared.database.video.video import Video
 
 try:
-    from methods.input.process_media import PrioritizedItem
-    from methods.input.process_media import add_item_to_queue
+    from shared.ingest.prioritized_item import PrioritizedItem
 except:
     pass
 from shared.regular import regular_methods, regular_log
@@ -19,6 +18,8 @@ from shared.database.connection.connection import Connection
 from sqlalchemy.orm.session import Session
 from shared.helpers.permissions import get_session_string
 from shared.url_generation import get_custom_url_supported_connector
+from shared.system_startup.start_media_queue import process_media_queue_manager
+
 
 
 @routes.route('/api/walrus/v1/project/<string:project_string_id>/input/packet',
@@ -49,7 +50,17 @@ def input_packet(project_string_id):
                  {'directory_id': None},
                  {'original_filename': None},
                  {'raw_data_blob_path': None},
+                 {'instance_list': {
+                     "required": False,
+                     "kind": list,
+
+                 }},
+                 {'text_data': None},
                  {'parent_file_id': {
+                     "required": False,
+                     "kind": int
+                 }},
+                 {'ordinal': {
                      "required": False,
                      "kind": int
                  }},
@@ -84,13 +95,10 @@ def input_packet(project_string_id):
     if len(log["error"].keys()) >= 1:
         return jsonify(log = log), 400
 
-    # log = {"success" : False, "errors" : []}
-
     # Careful, getting this from headers...
     # TODO: Remove usage of directory ID in headers.
     directory_id = request.headers.get('directory_id', None)
     if directory_id is None:
-        # Try to get it from payload
         directory_id = input['directory_id']
 
     if directory_id is None and input['mode'] != 'update':
@@ -106,14 +114,6 @@ def input_packet(project_string_id):
     media_type = input['media'].get('type', None)
 
     log["info"] = "Started processing"
-
-    # QUESTION how early do we want to record input here?
-    # ie do we want to record 400 type errors? or stictly after we
-    # have a "valid" starting point
-
-    # Do we actually want to use a long running operation here?
-    # If we do can't pass input directly.... sigh
-    # need to revist if want to do this using imediate mode or not
 
     diffgram_input_id = None
     video_split_duration = input['video_split_duration']
@@ -134,7 +134,6 @@ def input_packet(project_string_id):
             return jsonify(log = log), 400
         log = regular_log.default()
         connection_id_access_token = get_session_string()
-        print('NEW !!!!!', input.get('parent_file_id'))
         diffgram_input = enqueue_packet(project_string_id = project_string_id,
                                         session = session,
                                         media_url = media_url,
@@ -142,16 +141,18 @@ def input_packet(project_string_id):
                                         job_id = job_id,
                                         file_id = file_id,
                                         directory_id = directory_id,
-                                        instance_list = untrusted_input.get('instance_list', None),
+                                        instance_list = input.get('instance_list', None),
                                         parent_file_id = untrusted_input.get('parent_file_id', None),
                                         original_filename = input.get('original_filename', None),
                                         raw_data_blob_path = input.get('raw_data_blob_path', None),
                                         bucket_name = input.get('bucket_name', None),
                                         connection_id = input.get('connection_id', None),
+                                        ordinal = input.get('ordinal', 0),
                                         video_split_duration = video_split_duration,
                                         frame_packet_map = untrusted_input.get('frame_packet_map', None),
                                         batch_id = untrusted_input.get('batch_id', None),
                                         type = input.get('type', None),
+                                        text_data = input.get('text_data', None),
                                         enqueue_immediately = False,
                                         connection_id_access_token = connection_id_access_token,
                                         mode = mode,
@@ -214,7 +215,9 @@ def enqueue_packet(project_string_id,
                    auto_correct_instances_from_image_metadata = False,
                    extract_labels_from_batch = False,
                    connection_id_access_token = False,
-                   member = None):
+                   member = None,
+                   text_data: str = None,
+                   ordinal: int = 0):
     """
             Creates Input() object and enqueues it for media processing
         Returns Input() object that was created
@@ -261,16 +264,19 @@ def enqueue_packet(project_string_id,
     project = Project.get(session, project_string_id)
     if connection_id_access_token is not None:
         image_metadata['connection_id_access_token'] = connection_id_access_token
+
     diffgram_input = Input.new(
         image_metadata = image_metadata,
         file_id = file_id,
         task_id = task_id,
         batch_id = batch_id,
+        ordinal = ordinal,
         parent_file_id = parent_file_id,
         raw_data_blob_path = raw_data_blob_path,
         video_parent_length = video_parent_length,
         remove_link = remove_link,
         add_link = add_link,
+        text_data = text_data,
         copy_instance_list = copy_instance_list,
         external_map_id = external_map_id,
         original_filename = original_filename,
@@ -312,11 +318,27 @@ def enqueue_packet(project_string_id,
             priority = 10000,  # individual frames have a priority here.
             input_id = diffgram_input_id,
             media_type = media_type)
-        add_item_to_queue(item)
+        process_media_queue_manager.router(item)
     else:
         diffgram_input.processing_deferred = True  # Default
 
     return diffgram_input
+
+
+def validate_input_from_text_data(input: dict, log: dict):
+    if input.get('media') is None or input.get('media') == {}:
+        log['error'] = {}
+        log['error']['media'] = 'Provide media data. Needs to be {"type": str, "url": str<optional>}'
+
+    if input.get('media') is not None and input['media'].get('type') is None:
+        log['error'] = {}
+        log['error']['media.type'] = 'Provide media type needs to be ["text"]'
+
+    if input.get('text_data') is None:
+        log['error'] = {}
+        log['error']['text_data'] = 'Provide "text_data" as a string.'
+
+    return log
 
 
 def validate_input_from_blob_path(project: Project, input: dict, session: Session, log: dict):
@@ -324,12 +346,15 @@ def validate_input_from_blob_path(project: Project, input: dict, session: Sessio
         log['error'] = {}
         log['error']['connection_id'] = 'Provide a connection ID'
     connection = Connection.get_by_id(session, id = input.get('connection_id'))
-    connector, log = get_custom_url_supported_connector(session = session, log = log, connection_id = connection.id)
-    if regular_log.log_has_error(log):
-        return log
+
     if connection is None:
         log['error'] = {}
         log['error']['connection_id'] = 'Connection ID does not exist'
+        return log
+
+    connector, log = get_custom_url_supported_connector(session = session, log = log, connection_id = connection.id)
+    if regular_log.log_has_error(log):
+        return log
 
     if connection.project_id != project.id:
         log['error'] = {}
@@ -380,6 +405,15 @@ def validate_file_data_for_input_packet(session, input, project_string_id, log):
             return False, log, None
         else:
             return True, log, None
+    if input.get('type') == 'from_text_data':
+        log = validate_input_from_text_data(
+            input = input,
+            log = log
+        )
+        if regular_log.log_has_error(log):
+            return False, log, None
+        else:
+            return True, log, None
     valid_id = False
     valid_media_url = False
     valid_file_name = False
@@ -391,7 +425,7 @@ def validate_file_data_for_input_packet(session, input, project_string_id, log):
         media_type = None
 
     file_id = None
-    if input.get('file_id') is None:
+    if input.get('file_id') is None and input.get('type') != 'from_text_data':
         # Validate Media URL Case
         if media_url is None:
             log['error'] = {}

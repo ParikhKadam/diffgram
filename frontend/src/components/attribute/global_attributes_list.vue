@@ -1,6 +1,6 @@
 <template>
   <v-expansion-panels
-    v-if="global_attribute_groups_list"
+    v-if="sorted_global_attribute_groups_list"
     v-model="open"
     :accordion="true"
     :inset="false"
@@ -10,6 +10,8 @@
     :flat="true"
     :hover="true"
     :tile="true"
+    style="height: 100%"
+
   >
     <v-expansion-panel>
       <v-expansion-panel-header
@@ -24,7 +26,27 @@
           mdi-file
         </v-icon>
 
-        <h4>Globals</h4>
+        <ui_schema name="attribute_preview"
+                    v-if="global_attribute_groups_list && global_attribute_groups_list.length > 0 && task">
+          <attribute_preview
+            v-if="global_attribute_groups_list && global_attribute_groups_list.length > 0 && task"
+            :global_attribute_groups_list="global_attribute_groups_list"
+            :current_instance="current_global_instance"
+            :added_attributes="current_global_instance && current_global_instance.attribute_groups ? Object.keys(current_global_instance.attribute_groups) : []"
+          />
+        </ui_schema>
+
+        <attribute_preview
+          v-if="
+            global_attribute_groups_list && global_attribute_groups_list.length > 0 &&
+            $store.state.user.settings.show_attribute_preview &&
+            !task
+          "
+          :global_attribute_groups_list="global_attribute_groups_list"
+          :current_instance="current_global_instance"
+          :added_attributes="current_global_instance && current_global_instance.attribute_groups ? Object.keys(current_global_instance.attribute_groups) : []"
+        />
+        
 
         <v-spacer></v-spacer>
 
@@ -32,20 +54,21 @@
           x-small
           class="d-flex justify-center flex-grow-0"
         >
-            {{ global_attribute_groups_list.length }}
+          {{ sorted_global_attribute_groups_list.length }}
         </v-chip>
       </v-expansion-panel-header>
 
       <v-expansion-panel-content>
         <attribute_group_list
-          v-if="current_global_instance && global_attribute_groups_list && global_attribute_groups_list.length != 0"
-          style="overflow-y:auto; max-height: 400px"
+          v-if="current_global_instance && sorted_global_attribute_groups_list && sorted_global_attribute_groups_list.length !== 0"
+          style="overflow-y:auto;"
           mode="annotate"
+          ref="attribute_group_list"
           key="global_attribute_groups_list"
           :schema_id="schema_id"
           :project_string_id="project_string_id"
           :view_only_mode="view_only_mode"
-          :attribute_group_list_prop="global_attribute_groups_list"
+          :attribute_group_list_prop="sorted_global_attribute_groups_list"
           :current_instance="current_global_instance"
           @attribute_change="$emit('attribute_change', $event)"
         />
@@ -58,37 +81,22 @@
 <script lang="ts">
 import attribute_group_list from './attribute_group_list.vue';
 import Vue from "vue";
+import attribute_preview from "@/components/base/attribute_preview.vue"
 
-export default Vue.extend( {
-   name: 'global_attributes_list',
-   components: {
-     attribute_group_list: attribute_group_list
+export default Vue.extend({
+    name: 'global_attributes_list',
+    components: {
+      attribute_group_list: attribute_group_list,
+      attribute_preview
     },
     props: {
-      global_attribute_groups_list : {
-        type: Array,
-        default: null
-      },
-      current_global_instance:{
-        type: Object,
-        default: null
-      },
-      view_only_mode: {
-        type: Boolean,
-        default: false
-      },
-      schema_id: {
-        type: Number,
-        required: true
-      },
-      project_string_id:{
-        type: String,
-        required: true
-      },
-      open_state: {
-        type: Boolean || undefined,
-        default: undefined
-      }
+      global_attribute_groups_list: {type: Array, default: null},
+      current_global_instance: {type: Object, default: null},
+      view_only_mode: {type: Boolean, default: false},
+      schema_id: {type: Number, required: true},
+      project_string_id: {type: String, required: true},
+      open_state: {type: Boolean || undefined, default: undefined},
+      task: {type: Object, default: null},
     },
     data() {
       return {
@@ -96,21 +104,24 @@ export default Vue.extend( {
       }
     },
     watch: {
-      open_state: function(newVal, oldVal) {
+      open_state: function (newVal, oldVal) {
         if (newVal) {
           this.open = 0
-        }
-        else {
+        } else {
           this.open = undefined
         }
       }
     },
     mounted() {
       if (this.open_state === undefined) {
-        if(this.global_attribute_groups_list.length > 0) this.open = 0
-      }
-      else {
+        if (this.global_attribute_groups_list.length > 0) this.open = 0
+      } else {
         this.open = this.open_state ? 0 : undefined
+      }
+    },
+    computed: {
+      sorted_global_attribute_groups_list: function(){
+        return this.global_attribute_groups_list.sort((a, b) => a.ordinal - b.ordinal);
       }
     }
   }

@@ -7,15 +7,12 @@ def do_routes_importing():
     from methods.action.action_new import api_action_new
     from methods.action.action_previous import api_action_previous
     from methods.action.action_update import api_action_update
-    from methods.action.action_validate_config import api_action_validate
     from methods.action.workflow import new_workflow_factory_api
     from methods.action.workflow import workflow_view_api
     from methods.action.workflow_update import api_workflow_update
-    from methods.action.action_list import api_action_list
     from methods.action.action_template_list import api_action_template_list
     from methods.action.action_manual import api_action_manual
     from methods.action.action_template_get import api_get_action_template
-    from methods.action.action_stat import api_action_stat
     from methods.action.action_run_list import api_action_list_web
 
     from methods.project.project_update import api_project_update
@@ -52,7 +49,6 @@ def do_routes_importing():
     from methods.task.file.dir_attach import update_dirs_to_job_api
     from methods.source_control.file.file_exists import file_list_exists_api
 
-    from methods.task.stats.stats_leaderboard import stats_leadboard_api
     from methods.task.stats.stats_job import stats_job_api
     from methods.task.stats.stats_task import stats_task_api
     
@@ -161,16 +157,20 @@ def do_routes_importing():
 
     from methods.configs.mailgun_is_set import mailgun_is_set
     from methods.configs.oauth2_is_set import oauth2_is_set
+    from methods.configs.set_logo import api_admin_set_logo
     from methods.configs.admin_install_info import api_admin_install_info
+    from methods.configs.admin_queue_status import api_admin_queue_status
+    from methods.configs.get_system_logo import api_system_get_logo
     from methods.configs.is_open_source import api_is_open_source
     from methods.configs.large_api_chunk_size import large_api_chunk_size
+    from methods.configs.get_version import api_get_version
 
     from methods.task.credential.credential_type_new import new_credential_type_api
     from methods.task.credential.credential_list import credential_list_api
     from methods.task.credential.credential_type_attach_to_job import credential_type_attach_to_job_api
     from methods.task.credential.credential_type_update import update_credential_type_image_api
 
-    from methods.task.stats.fast_stats import job_stat, job_user_stats
+    from methods.task.stats.fast_stats import job_stat, job_user_stats, project_stats
     from methods.task.task_time_tracking.task_track_time import api_task_track_time
 
 

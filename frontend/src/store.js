@@ -194,6 +194,50 @@ export const project = {
     }
 
   },
+  getters:{
+    member_in_roles: state =>  (member_id, roles_list) => {
+      if(!state.current){
+        return
+      }
+      if(!state.current.member_list){
+        return
+      }
+      const member = state.current.member_list.find(elm => elm.member_id === member_id)
+      if(!member){
+        return
+      }
+      if(!member.permission_level){
+        return
+      }
+
+      for (const role of member.permission_level){
+        if(!role){
+          continue
+        }
+        if(roles_list.includes(role.toLowerCase())){
+          return true
+        }
+      }
+      return false
+
+    },
+    get_current_project_role: state =>  (member_id) => {
+      if(!state.current){
+        return
+      }
+      if(!state.current.member_list){
+        return
+      }
+      const member = state.current.member_list.find(elm => elm.member_id === member_id)
+      if(!member){
+        return
+      }
+      if(!member.permission_level){
+        return
+      }
+      return member.permission_level[0]
+    },
+  },
   mutations: {
     set_project_name(state, project_name) {
       state.project_name = project_name
@@ -328,6 +372,11 @@ const integration_spec_list_template = [
     'display_name': 'Minio',
     'name': 'minio',
     'image-icon': 'https://min.io/resources/img/logo/MINIO_Bird.png',
+  },
+  {
+    'display_name': 'Mongo DB',
+    'name': 'mongo_db',
+    'image-icon': 'https://w7.pngwing.com/pngs/956/695/png-transparent-mongodb-original-wordmark-logo-icon-thumbnail.png',
   }
 ]
 
@@ -636,11 +685,21 @@ const ui_schema = {
     },
     get_current_ui_schema: (state) => () => {
       return state.current;
-    }
+    },
+    get_custom_buttons_current_schema: (state) => () => {
+      /**
+       * custom_button: CustomButton type object.
+       * **/
+      if(state && state.current['custom_buttons']){
+        return state.current['custom_buttons'].buttons_list
+      }
+
+    },
   },
   mutations: {
     set_ui_schema(state, current) {
       // Doing this to keep the watchers, so the root pointer in theory is the same
+      state.current = {}
       for (const [key, value] of Object.entries(current)) {
         state.current[key] = value
       }
@@ -701,6 +760,41 @@ const ui_schema = {
       state.refresh = Date.now()
 
     },
+    update_custom_button(state, payload){
+      let button_name = payload[0]
+      let button = payload[1]
+      console.log('storee', button, button_name, state.current['custom_buttons'])
+      if(!state.current['custom_buttons']){
+        return
+      }
+      let custom_buttons = state.current['custom_buttons'].buttons_list
+      for(let i = 0; i < custom_buttons.length; i++){
+        if(custom_buttons[i].name === button_name){
+          custom_buttons[i] = button
+        }
+      }
+    },
+    add_custom_button(state, custom_button){
+      /**
+       * custom_button: CustomButton type object.
+       * **/
+
+      let custom_buttons = state.current['custom_buttons']
+      if (!custom_buttons){
+        custom_buttons = {
+          'buttons_list': [custom_button]
+        }
+      } else{
+        if(!custom_buttons.buttons_list){
+          custom_buttons.buttons_list = [custom_button]
+        } else{
+          custom_buttons.buttons_list.push(custom_button)
+        }
+
+      }
+      state.current['custom_buttons'] = custom_buttons
+      state.current = {...state.current}
+    },
 
     set_ui_schema_top_level_key_value(state, payload) {
       state.current[payload[0]] = payload[1]
@@ -758,7 +852,8 @@ const snackbar = {
 
 export const system = {
   state: {
-    is_open_source: undefined
+    is_open_source: undefined,
+    logo_refresh: new Date(),
   },
   mutations: {
     check_is_open_source(state) {
@@ -768,6 +863,9 @@ export const system = {
         state.is_open_source = false
       }
     },
+    logo_refresh(state) {
+      state.logo_refresh = new Date()
+    }
   }
 }
 

@@ -33,6 +33,17 @@ export const get_install_info = async () => {
     }
 }
 
+export const get_queue_status = async () => {
+    try {
+        const { data } = await axios.get('/api/v1/admin/queue/status')
+        return data
+    } catch(error) {
+        return {
+            error
+        }
+    }
+}
+
 export const get_walrus_status = async () => {
     try {
         return await axios.get('/api/walrus/status')
@@ -65,6 +76,15 @@ export const get_large_api_chunk_size = async () => {
   try {
     let res = await axios.get('/api/configs/large-api-chunk-size')
     return res.data.large_api_chunk_size
+  } catch(error) {
+    return error
+  }
+}
+
+export const get_version = async () => {
+  try {
+    let res = await axios.get('/api/configs/version')
+    return res.data
   } catch(error) {
     return error
   }

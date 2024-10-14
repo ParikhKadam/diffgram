@@ -339,8 +339,6 @@ def job_update_api(project_string_id):
     apis_user_list=["api_enabled_builder"])
 def job_output_dir_update(project_string_id):
     """
-    Do we want a different spec list here...
-
     """
     output_job_spec = [
         {"job_id": {
@@ -348,7 +346,7 @@ def job_output_dir_update(project_string_id):
         }
         },
         {"output_dir": {
-            'kind': str,
+            'kind': int,
             'default': None,
             'required': False
         }},
@@ -384,15 +382,23 @@ def job_output_dir_update(project_string_id):
 
         if regular_log.log_has_error(log):
             return jsonify(log=log), 400
+
         log['success'] = True
         out = jsonify(job=job.serialize_new(),
                       log=log)
+
         return out, 200
 
 
 def update_output_dir_actions(session, job, project, input_data, log):
+
+    if input_data['output_dir_action'] not in ['copy', 'move', 'nothing']:
+        log['error']['output_dir'] = 'output_dir  must be "copy", "move" or "nothing".'
+        return None, log
+
     if input_data['output_dir_action'] == 'nothing':
         job.output_dir_action = input_data['output_dir_action']
+        job.completion_directory_id = None
         session.add(job)
         return job, log
 
@@ -402,9 +408,6 @@ def update_output_dir_actions(session, job, project, input_data, log):
         log['error']['output_dir'] = "No directory found"
         return None, log
 
-    if input_data['output_dir_action'] not in ['copy', 'move', 'nothing']:
-        log['error']['output_dir'] = 'output_dir  must be "copy", "move" or "nothing".'
-        return None, log
     job_observable = task_file_observers.JobObservable(session=session, log=log, job=job)
     job.output_dir_action = input_data['output_dir_action']
     directory_observer = task_file_observers.DirectoryJobObserver(session=session,
@@ -684,22 +687,7 @@ def new_or_update_core(session,
                        review_chance=0,
                        tag_list=None
                        ):
-    """
 
-    Even if the user wants to copy an existing directory exactly
-    for the job for isolation we create a new directory and pointers to it
-
-    Allows selection of a a subset of the directory (ie only non-completed images)
-    Assumption is data “flows”
-    We expect more data to be added to a user’s original directory after job is created
-    Can merge files fairly easily in theory but can’t go back in time and undo if it doesn’t exist in the first place
-
-    """
-
-    # Limits on "Created" time... ie only create once every 3 seconds
-
-    # CAUTION some of the stuff is outside of core right now
-    # needs to be reviewed (see API function above)
     is_updating = False
     if job is None:
         job = Job(member_created=member,

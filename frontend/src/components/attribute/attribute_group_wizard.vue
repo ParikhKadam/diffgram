@@ -34,33 +34,41 @@
             Scope
           </v-stepper-step>
 
-
-
-          <v-divider></v-divider>
-
           <v-stepper-step
             editable
             :complete="step > 4"
-            step="4">
-           Visible When
+            step="4"
+          >
+            Access
           </v-stepper-step>
+
+
 
           <v-divider></v-divider>
 
           <v-stepper-step
             editable
             :complete="step > 5"
-            step="5"
+            step="5">
+           Triggers
+          </v-stepper-step>
+
+          <v-divider></v-divider>
+
+          <v-stepper-step
+            editable
+            :complete="step > 6"
+            step="6"
           >
-            {{ group.kind !== "tree" ? "Options" : "Tree" }}
+            Values
           </v-stepper-step>
 
           <v-divider v-if="group.kind !== 'tree'"></v-divider>
           <v-stepper-step
             v-if="group.kind !== 'tree'"
             editable
-            :complete="step > 6"
-            step="6">
+            :complete="step > 7"
+            step="7">
             Defaults
           </v-stepper-step>
 
@@ -71,16 +79,16 @@
           color="secondary"
           striped
           :value="global_progress"
-          :height="group.kind !== 'tree' ? 7 : 6"
+          :height="group.kind !== 'tree' ? 8 : 7"
         >
         </v-progress-linear>
 
 
-        <v-stepper-items style="height: 100%" class="pt-4">
+        <v-stepper-items style="height: 100%; min-height: 300px; border-bottom: 1px solid #e0e0e0" class="pt-4">
 
           <v-stepper-content step="1" style="height: 100%" data-cy="attribute_wizard_step_1">
 
-            <h2 class="pb-2"> 1. What Kind of Question? </h2>
+            <h1 class="pb-2">Kind</h1>
 
             <diffgram_select
               v-if="group"
@@ -107,7 +115,7 @@
 
           <v-stepper-content step="2" style="height: 100%" data-cy="attribute_wizard_step_2">
 
-            <h2> 2. Name Your Question </h2>
+            <h1>Name</h1>
 
             <v-layout>
               <v-text-field
@@ -159,32 +167,41 @@
 
           <v-stepper-content step="3" style="height: 100%" data-cy="attribute_wizard_step_3">
 
-            <h2> 3. Per Annotation Or File? (Optional) </h2>
+            <h1>Scope</h1>
 
-            <br>
             <p>
-            The Default is per Annotation: each annotation instance - e.g. a box or entity - has different values.
+              Scope determines the Attribute's relation to Annotations, Files or Objects.
+              <br>
+              Learn more about
+            <a href="https://diffgram.readme.io/docs/attribute-scope" target="_blank">
+                Attribute Scope.
+            </a>
             </p>
-            <p>
-            The Alternative is per File: each file - e.g. an image, video, text - has only one set of these values.
-            </p>
-            <br>
 
             <v-layout class="justify-center align-center">
               <v-btn-toggle color="secondary" v-model="toggle_global_attribute" @change="set_is_global($event, group)">
-                <v-btn>
+                <v-btn data-cy="instance-attribute-button">
                   <v-icon left color="primary" size="18">
                     mdi-brush
                   </v-icon>
-                  Per Annotation (Default)
+                  Annotation
                 </v-btn>
 
-                <v-btn>
+                <v-btn data-cy="global-attribute-button">
                   <v-icon left color="primary" size="18">
                     mdi-file
                   </v-icon>
 
-                   Per File
+                   File
+
+                </v-btn>
+
+                <v-btn data-cy="global-compound-attribute-button">
+                  <v-icon class="pl-2 pr-2" left color="primary" size="18">
+                    mdi-file-table-box-multiple
+                  </v-icon>
+
+                    Object
 
                 </v-btn>
               </v-btn-toggle>
@@ -200,18 +217,58 @@
 
           </v-stepper-content>
 
-
           <v-stepper-content step="4" style="height: 100%" data-cy="attribute_wizard_step_4">
 
-            <h2 class="pb-2" > 4. When Do You Want to Show This? </h2>
+            <h1> Access Control </h1>
 
-            <p v-if="group.is_global" class="d-flex flex-column">
-              <v-icon color="secondary" size="85">mdi-pencil</v-icon>
-              <strong class="secondary--text">
-              Cannot select labels because attribute is a File Level
-              Attribute. Change it to instance attribute to allow labels selection.
-            </strong>
+            <p>
+              Control Access for this Attribute.
+              <br>
+              Learn more about
+              <a href="https://diffgram.readme.io/docs/attribute-access-control" target="_blank">
+                  Attribute Access Control.
+              </a>
             </p>
+
+
+            <h2> Read Only? </h2>
+
+            <v-layout class="justify-center align-center">
+              <v-checkbox
+                clearable
+                v-model="group.is_read_only"
+                label="Read Only?"
+                @change="$emit('change')"
+              >
+              </v-checkbox>
+
+            </v-layout>
+
+            <wizard_navigation
+              @next="go_to_step(5)"
+              @back="go_back_a_step()"
+              :disabled_next="!group.prompt"
+              :skip_visible="false"
+            >
+            </wizard_navigation>
+
+          </v-stepper-content>
+
+          <v-stepper-content step="5" style="height: 100%" data-cy="attribute_wizard_step_5">
+
+            <h1 class="pb-2" >Triggers</h1>
+
+            <div v-if="group.is_global" class="d-flex flex-column">
+            <strong class="secondary--text">
+              <v-icon color="secondary" size="85">mdi-check</v-icon>
+              <p>
+                Scope is set to Global which is always shown.
+              </p>
+              <p>
+              Change Scope to Per Annotation to trigger conditional visibility.
+              </p>
+            </strong>
+            </div>
             <label_select_only
               v-if="!group.is_global"
               :disabled="group.is_global"
@@ -228,7 +285,7 @@
             </label_select_only>
 
             <wizard_navigation
-              @next="go_to_step(5)"
+              @next="go_to_step(6)"
               @back="go_back_a_step()"
               :disabled_next="!group.kind"
               :skip_visible="false"
@@ -237,20 +294,39 @@
 
           </v-stepper-content>
 
-          <v-stepper-content step="5" style="height: 100%" data-cy="attribute_wizard_step_5">
+          <v-stepper-content step="6" style="height: 100%" data-cy="attribute_wizard_step_6">
 
-          <v-layout v-if="group.kind !== 'tree'" column>
+          <h1 class="pb-2">
+          Values
+          </h1>
+
+          <div v-if="group.kind == 'text'" >
+            <strong class="secondary--text">
+              <v-icon color="secondary" size="85">mdi-check</v-icon>
+              <p>
+                There are no values to set on Free Text.
+              </p>
+            </strong>
+          </div>
+
+          <div v-if="group.kind == 'slider'" >
+            <strong class="secondary--text">
+              <v-icon color="secondary" size="85">mdi-check</v-icon>
+              <p>
+                Use Defaults to set slider Defaults.
+              </p>
+            </strong>
+          </div>
+
+          <v-layout v-if="['select', 'multiple_select', 'radio'].includes(group.kind)" column>
 
             <v_error_multiple :error="error">
             </v_error_multiple>
 
-            <h2 class="pb-2">
-            5. Options:
-            </h2>
             <div class="pa-2">
               <button_with_menu
-                tooltip_message="New Option"
-                button_text="New Option"
+                tooltip_message="New"
+                button_text="New"
                 datacy="new_attribute_option_button"
                 datacyclose="close_button_new_attribute"
                 v-if="group && group.kind != 'text' && group.kind != 'slider' "
@@ -271,6 +347,7 @@
                     :project_string_id="project_string_id"
                     :group_id="group.id"
                     :menu_open="props.menu_open"
+                    @attribute_updated="attribute_updated($event)"
                   >
 
                   </attribute_new_or_update>
@@ -288,7 +365,6 @@
                 v-model="group.attribute_template_list"
                 draggable=false
               >
-              <h4>Options List:</h4>
                 <template
                   v-for="item in group.attribute_template_list">
 
@@ -296,6 +372,7 @@
                     :project_string_id="project_string_id"
                     :attribute="item"
                     :key="item.id"
+                    @attribute_updated="attribute_updated($event)"
                   >
                   </attribute>
 
@@ -315,10 +392,9 @@
 
           </v-layout>
 
-          <v-layout v-else column>
+          <v-layout v-if="group.kind == 'tree'" column>
             <v_error_multiple :error="error" />
 
-            <h2 class="pb-2"> 5. Create your tree attribute:</h2>
             <v-treeview
               :items="tree_items"
               :active="[]"
@@ -387,7 +463,7 @@
 
 
             <wizard_navigation
-              @next="go_to_step(6)"
+              @next="go_to_step(7)"
               @back="go_back_a_step()"
               :disabled_next="!group.kind"
               :skip_visible="false"
@@ -396,7 +472,7 @@
 
           </v-stepper-content>
 
-          <v-stepper-content v-if="group.kind !== 'tree'" step="6" style="height: 100%" data-cy="attribute_wizard_step_6">
+          <v-stepper-content v-if="group.kind !== 'tree'" step="7" style="height: 100%" data-cy="attribute_wizard_step_7">
 
             <!-- Edit Default  default_id default_value -->
             <v-layout column>
@@ -504,15 +580,15 @@
 
 
             <wizard_navigation
-              @next="go_to_step(7)"
-              @skip="go_to_step(6)"
+              @next="go_to_step(8)"
+              @skip="go_to_step(7)"
               @back="go_back_a_step()"
                                >
             </wizard_navigation>
 
           </v-stepper-content>
 
-          <v-stepper-content :step="group.kind !== 'tree' ? 7 : 6" data-cy="attribute_wizard_step_7">
+          <v-stepper-content :step="group.kind !== 'tree' ? 8 : 7" data-cy="attribute_wizard_step_8">
 
             <h2> Complete! Great work. </h2>
 
@@ -542,7 +618,7 @@ import attribute_new_or_update from './attribute_new_or_update.vue';
 import { v4 as uuidv4 } from "uuid";
 import { TreeNode } from "../../helpers/tree_view/Node"
 import { construct_tree, find_all_relatives } from "../../helpers/tree_view/construct_tree"
-import { attribute_update_or_new } from "../../services/attributesService"
+import { attribute_update_or_new } from "../../services/attributesService.ts"
 import pLimit from 'p-limit';
 
 export default Vue.extend( {
@@ -633,15 +709,34 @@ export default Vue.extend( {
     }
   },
   methods: {
+
+    attribute_updated: function (attribute_template){
+      const attribute_template_existing = this.group.attribute_template_list.find(a => a.id === attribute_template.id)
+      if (attribute_template_existing) {
+        let index = this.group.attribute_template_list.indexOf(attribute_template_existing)
+        this.group.attribute_template_list[index].name = attribute_template.name
+      } else {
+        this.group.attribute_template_list.push(attribute_template)
+      }
+    },
+
     set_global_attribute: function(){
       if(this.group.is_global){
-        this.toggle_global_attribute = 1
+        if(this.group.global_type === 'compound_file'){
+          this.toggle_global_attribute = 2
+        } else{
+          this.toggle_global_attribute = 1
+        }
+
       }
       else{
         this.toggle_global_attribute = 0
       }
     },
     build_tree_data: function(){
+
+      if (this.group.kind != 'tree') { return }
+
       this.group.attribute_template_list.map(attr => {
         const new_node = new TreeNode(attr.group_id, attr.name)
         new_node.initialize_existing_node(attr.id, attr.parent_id)
@@ -651,6 +746,10 @@ export default Vue.extend( {
     set_is_global: function(value, group){
       if(value === 1){
         group.is_global = true
+        group.global_type = 'file'
+      } else if(value === 2){
+        group.is_global = true
+        group.global_type = 'compound_file'
       }
       else{
         group.is_global = false

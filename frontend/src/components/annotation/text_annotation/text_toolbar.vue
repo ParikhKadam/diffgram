@@ -1,7 +1,7 @@
 <template>
   <v-toolbar
     dense
-    width="100%"
+    width="100vw"
     elevation="0"
     fixed
     :height="height"
@@ -17,10 +17,7 @@
               :href="'/me'"
             >
               <div class="pt-2 pr-3 clickable">
-                <img
-                  src="https://storage.googleapis.com/diffgram-002/public/logo/diffgram_logo_word_only.png"
-                  height="30px"
-                />
+                <logo :height="30"></logo>
               </div>
             </ahref_seo_optimal>
           </ui_schema>
@@ -57,7 +54,7 @@
             tooltip_message="Undo (ctrl+z)"
             ui_schema_name="undo"
             datacy="undo"
-            :disabled="undo_disabled"
+            :disabled="!annotation_ui_context.command_manager.command_history.undo_posible"
             :icon_style="true"
             :bottom="true"
             @click="$emit('undo')"
@@ -69,12 +66,18 @@
             datacy="redo"
             tooltip_message="Redo (ctrl+y)"
             ui_schema_name="redo"
-            :disabled="redo_disabled"
+            :disabled="!annotation_ui_context.command_manager.command_history.undo_posible"
             :icon_style="true"
             :bottom="true"
             @click="$emit('redo')"
           />
 
+          <custom-buttons-section
+            v-on="$listeners"
+            :project_string_id="project_string_id"
+            :editing="show_ui_schema_context_menu">
+
+          </custom-buttons-section>
           <v-divider vertical v-if="task && task.status !== 'complete'"></v-divider>
 
           <v_is_complete
@@ -85,9 +88,7 @@
             @complete_task="$emit('complete_task')"
             @replace_file="$emit('replace_file', $event)"
             @on_next="$emit('change_task', 'next')"
-            @on_task_annotation_complete_and_save="
-                    $emit('on_task_annotation_complete_and_save')
-                    "
+            @on_task_annotation_complete_and_save="$emit('on_task_annotation_complete_and_save')"
             :save_and_complete="true"
             :loading="save_loading"
             :disabled="save_loading || (!file && !task)"
@@ -236,7 +237,7 @@
         tooltip_message="Undo (ctrl+z)"
         ui_schema_name="undo"
         datacy="undo"
-        :disabled="undo_disabled"
+        :disabled="!annotation_ui_context.command_manager.command_history.undo_posible"
         :icon_style="true"
         :bottom="true"
         @click="$emit('undo')"
@@ -248,7 +249,7 @@
         tooltip_message="Redo (ctrl+y)"
         ui_schema_name="redo"
         datacy="redo"
-        :disabled="redo_disabled"
+        :disabled="!annotation_ui_context.command_manager.command_history.redo_posible"
         :icon_style="true"
         :bottom="true"
         @click="$emit('redo')"
@@ -371,24 +372,22 @@ import text_hotkeys from "./text_hotkeys.vue"
 import label_select_annotation from "../../label/label_select_annotation.vue"
 import label_schema_selector from "../../label/label_schema_selector.vue"
 import task_status from "../image_and_video_annotation/task_status.vue"
+import CustomButtonsSection from "@/components/ui_schema/custom_buttons_section.vue";
+import image_and_video_toolbar from "@/components/annotation/image_and_video_annotation/toolbar.vue";
+import logo from "../../diffgram/logo.vue";
 
 export default Vue.extend({
   name: "text_toolbar",
   components: {
+    logo,
+    image_and_video_toolbar,
+    CustomButtonsSection,
     label_select_annotation,
     label_schema_selector,
     text_hotkeys,
     task_status
   },
   props: {
-    undo_disabled: {
-      type: Boolean,
-      required: true
-    },
-    redo_disabled: {
-      type: Boolean,
-      required: true
-    },
     has_changed: {
       type: Boolean,
       default: false
@@ -398,7 +397,7 @@ export default Vue.extend({
       default: false
     },
     height: {
-      type: String,
+      type: String | Number,
       default: '50px'
     },
     project_string_id: {
@@ -436,8 +435,15 @@ export default Vue.extend({
     label_schema: {
       type: Object,
       required: true
+    },
+    annotation_ui_context: {
+      type: Object,
+      required: true
+    },
+    show_ui_schema_context_menu: {
+      type: Boolean,
+      required: true
     }
-
   }
 })
 </script>

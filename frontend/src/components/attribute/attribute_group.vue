@@ -43,7 +43,7 @@
               :disabled="view_only_mode"
               v-for="item in select_format"
               :key="item.name"
-              :label="`${item.display_name} [${item.id}]`"
+              :label="get_label(item)"
               :value="item"
             ></v-radio>
           </v-radio-group>
@@ -108,18 +108,21 @@
           >
           </diffgram_select>
 
-          <v-container class="d-flex align-content-center justify-start"  v-if="group.kind === 'slider' || !group.kind">
-            <v-slider
-              :data-cy="`${group.prompt}_value_slider`"
-              :min="group.min_value"
-              :max="group.max_value"
-              v-model="internal_selected"
-              :label="group.prompt"
-              :disabled="loading || view_only_mode"
-              @change="attribute_change()"
-            >
-            </v-slider>
-            <p>{{internal_selected}}</p>
+          <v-container  v-if="group.kind === 'slider' || !group.kind">
+            <v-layout>
+              <p></p>
+              <v-slider
+                :data-cy="`${group.prompt}_value_slider`"
+                :min="group.min_value"
+                :max="group.max_value"                
+                :tick-size="group.max_value"
+                thumb-label="always"
+                v-model="internal_selected"
+                :disabled="loading || view_only_mode"
+                @change="attribute_change()"
+              >
+              </v-slider>
+            </v-layout>
           </v-container>
 
           <v-time-picker
@@ -164,6 +167,7 @@
             </div>
             <v-sheet class="pa-4 primary lighten-2">
               <v-text-field
+                ref="treeview_search"
                 v-model="search"
                 label="Start by typing attribute name"
                 dark
@@ -185,6 +189,7 @@
               }"
             >
             <v-treeview
+              ref="treeview"
               :items="tree_items"
               :load-children="load_clidren"
               :open-all="search ? true : false"
@@ -199,7 +204,7 @@
                   />
               </template>
               <template v-slot:append="{item}">
-                <v-chip x-small v-if="$store.state.user.settings.show_ids === true">
+                <v-chip v-if="show_ids && $store.state.user.settings.show_ids == true " x-small>
                   ID: {{ item.id }}
                 </v-chip>
               </template>
@@ -239,7 +244,7 @@
           <v-layout>
             <!-- KIND -->
             <diffgram_select
-              data_cy="attribute_kind_select"
+              data_cy="attribute_kind_select_no_wizard"
               :item_list="kind_list"
               v-model="group.kind"
               label="Kind"
@@ -531,6 +536,7 @@
   import { TreeNode } from "../../helpers/tree_view/Node"
 
   import Vue from "vue";
+  import {attribute_group_update} from "../../services/attributesService";
 
   export default Vue.extend({
 
@@ -549,6 +555,10 @@
 
         'project_string_id': {
           default: null
+        },
+        'show_ids': {
+          default: true,
+
         },
         'group': {
           default: {}
@@ -580,6 +590,7 @@
 
       data() {
         return {
+
           search: "",
           tree_force_rerender: false,
           tree_rerender_timeout: null,
@@ -801,6 +812,30 @@
         }
       },
       methods: {
+        set_radio_select_value_by_id: function(option_id){
+          for(let option of this.select_format){
+            if(option.id === option_id){
+              this.internal_selected = option
+              this.attribute_change()
+            }
+          }
+        },
+        get_label: function(item){
+
+          let label = item.display_name
+          if (this.$store.state.user.settings.show_ids == true) {
+            label += " [" +  item.id + "]"
+          }
+          return label
+        },
+
+        set_attribute_value: function(value){
+          if(['radio', 'select'].includes(this.group.kind)){
+              // Assume value is the ID for this case
+              this.set_radio_select_value_by_id(value)
+          }
+          // TODO: implement set method for rest of attributes.
+        },
         add_hotkey_listeners: function(){
           window.addEventListener('keyup', this.attribute_keyup_handler);
           window.addEventListener('keydown', this.attribute_keydown_handler);
@@ -1069,12 +1104,6 @@
             }
           }
           else if(this.group.kind === 'slider'){
-            if(!this.group.min_value){
-              this.group.min_value = 1;
-            }
-            if(!this.group.max_value){
-              this.group.max_value = 10;
-            }
             this.internal_selected = parseInt(value, 10)
           }
           else if(this.group.kind === 'time'){
@@ -1153,7 +1182,7 @@
           }
 
           // we assume if no labels selected it's ok
-          if (this.label_file_list.length == 0) {
+          if (this.group_internal.label_file_list.length == 0) {
             return true
           }
 
@@ -1165,7 +1194,7 @@
         recieve_label_file: function (label_file_list) {
 
 
-          this.label_file_list = label_file_list
+          this.group_internal.label_file_list = label_file_list
 
           // this feels a bit hacky but at least should work for now...
           if (this.first_load == true) {
@@ -1179,7 +1208,7 @@
         },
 
 
-        api_group_update: function (mode) {
+        api_group_update: async function (mode) {
           this.loading_update = true
           this.error = {}
           this.success = false
@@ -1197,44 +1226,28 @@
             // so doing this as a work around
             group.kind = "ARCHIVE"
           }
-          let min_value, max_value;
+ 
           if(group.kind === 'slider'){
-            min_value = parseInt(this.min_value, 10);
-            max_value = parseInt(this.max_value, 10);
-            if(max_value < parseInt(group.default_value, 10)){
-              max_value = parseInt(group.default_value, 10)
-              group.max_value = max_value;
+
+            if(!this.group.min_value) {
+              this.group.min_value=1;
             }
-            if(min_value > parseInt(group.default_value, 10)){
-              min_value = parseInt(group.default_value, 10)
-              group.min_value = min_value;
+            if(!this.group.max_value) {
+              this.group.max_value=10;
             }
           }
 
-          axios.post(
-            '/api/v1/project/' + this.project_string_id +
-            '/attribute/group/update',
-            {
-              group_id: Number(group.id),
-              name: group.name,
-              prompt: group.prompt,
-              label_file_list: this.label_file_list,
-              kind: group.kind,
-              default_id: group.default_id,
-              default_value: group.default_value,
-              min_value: min_value,
-              max_value: max_value,
-              mode: mode,
-              is_global: this.group.is_global
-            }).then(response => {
-
-            //this.group = response.data.group
-
+          try{
+            let [data, error] = await attribute_group_update(this.project_string_id, mode, group)
             this.success = true
             this.loading_update = false
-
-            // response.data.log.info
-
+            if(error){
+              if (error.response.status == 400) {
+                this.error = error.response.data.log.error
+              }
+              this.loading_update = false
+              console.error(error)
+            }
 
             // careful mode is local, not this.mode
             if (mode == 'ARCHIVE') {
@@ -1243,26 +1256,13 @@
 
               this.$store.commit('attribute_refresh_group_list')
             }
-            if(this.group.kind === 'slider'){
-              if(!this.group.min_value){
-                this.group.min_value = 1;
-              }
-              if(!this.group.max_value){
-                this.group.max_value = 10;
-              }
-            }
-
-          }).catch(error => {
-
-            if (error) {
-              if (error.response.status == 400) {
-                this.error = error.response.data.log.error
-              }
-              this.loading_update = false
-              console.error(error)
-            }
-          });
-
+          }
+          catch (error){
+            this.loading_update = false
+            console.error(error)
+          } finally {
+            this.loading_update = false
+          }
         }
 
       }

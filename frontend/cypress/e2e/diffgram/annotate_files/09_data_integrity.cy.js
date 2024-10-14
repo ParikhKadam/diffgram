@@ -19,8 +19,8 @@ describe('Annotate Files Tests', () => {
     context('It Correctly raises an error when frontend sends invalid instance list.', () => {
       it('Correctly raises an instance_list integrity error.', () => {
         cy.wait(1000)
-        cy.intercept(`api/project/*/file/*/annotation/update`).as('annotation_update')
-
+        cy.intercept(`http://localhost:8085/api/project/*/file/*/annotation/update`).as('annotation_update')
+          .get('[data-cy="minimize-file-explorer-button"]').click({force: true})
 
         // Draw 3 boxes
         const boxes = [
@@ -56,7 +56,6 @@ describe('Annotate Files Tests', () => {
           cy.wait(500)
           cy.mouseupcanvas();
           cy.wait(500)
-
 
 
         }
@@ -113,43 +112,55 @@ describe('Annotate Files Tests', () => {
 
     context('It Correctly saves in parellel all frames when pasting to multiple frames', () => {
       it('Correctly raises an instance_list integrity error.', () => {
-        cy.intercept(`api/project/*/file/*/annotation/update`).as('annotation_update')
+        cy.intercept(`http://localhost:8085/api/project/*/file/*/annotation/update`).as('annotation_update')
 
 
         // Draw 1 boxes
         const boxes = [
           {
-            min_x: 140,
-            min_y: 140,
-            max_x: 300,
-            max_y: 300,
+            min_x: 400,
+            min_y: 100,
+            max_x: 600,
+            max_y: 250,
           },
         ]
         for (let box of boxes) {
-          cy.mousedowncanvas(box.min_x, box.min_x)
-          .wait(500)
+          cy.mousedowncanvas(box.min_x, box.min_y)
+            .wait(500)
 
-          .mouseupcanvas()
-          .wait(1000)
+            .mouseupcanvas()
+            .wait(1000)
 
-          .mousedowncanvas(box.max_x, box.max_x)
-          .wait(500)
-          .mouseupcanvas()
+            .mousedowncanvas(box.max_x, box.max_y)
+            .wait(500)
+            .mouseupcanvas()
 
-          .wait(2000)
+            .wait(2000)
         }
         cy.wait(7000)
           .get('[data-cy="edit_toggle"]').click({force: true})
-          .mousedowncanvas(160, 160)
+          .wait(500)
+          .mousemovecanvas(500, 150)
+          .mousedowncanvas(500, 150)
           .wait(500)
           .mouseupcanvas()
           .wait(1000)
-          .rightclickdowncanvas(160, 160)
+          .mousemovecanvas(500, 150)
+          .mousedowncanvas(500, 150)
+          .wait(500)
+          .mouseupcanvas()
+          .wait(500)
+          .mousemovecanvas(500, 150)
+          .wait(500)
+          .rightclickdowncanvas(500, 150)
           .wait(1000)
           .get('[data-cy=copy_instance]').should('exist')
           .get('[data-cy=copy_instance]').click({force: true})
           .wait(1000)
-          .rightclickdowncanvas(160, 160)
+          .mousemovecanvas(500, 150)
+          .wait(500)
+          .rightclickdowncanvas(500, 150)
+          .wait(500)
           .get('[data-cy=show_menu_paste_next_frames]').click({force: true})
           .wait(500)
           .get('[data-cy=paste_frame_count').type('{backspace}5')
@@ -170,7 +181,7 @@ describe('Annotate Files Tests', () => {
 
     context('It Correctly saves all pending frames when fetching a new frame buffer.', () => {
       it('Checks no frames are pending save when re fetching frame buffer.', () => {
-        cy.intercept(`api/project/*/file/*/annotation/update`).as('annotation_update')
+        cy.intercept(`http://localhost:8085/api/project/*/file/*/annotation/update`).as('annotation_update')
         // Draw 1 boxes
         cy.wait(2000)
           .get('[data-cy="edit_toggle"]').click({force: true})
@@ -183,40 +194,43 @@ describe('Annotate Files Tests', () => {
           },
         ]
         for (let box of boxes) {
-          cy.mousedowncanvas(box.min_x, box.min_x)
+          cy.mousedowncanvas(box.min_x, box.min_y)
             .wait(500)
             .mouseupcanvas()
             .wait(1000)
-            .mousedowncanvas(box.max_x, box.max_x)
+            .mousedowncanvas(box.max_x, box.max_y)
             .wait(500)
             .mouseupcanvas()
             .wait(2000)
         }
-        cy.wait(5000)
+        cy.wait(3000)
+          .window().then(window => {
+          window.AnnotationUIFactory.set_has_changed(true)
+        })
           .window().its('video_player').then(video_player_component => {
-            const slider_component = video_player_component.$refs.slider;
-            slider_component.$emit('start');
-            cy.wait(1000).then(() => {
-              slider_component.$emit('end', 65);
-              cy.wait(2000).then(() => {
-                  cy.get('@annotation_update.all').should('have.length.at.least', 1)
-                  .then((xhrs) => {
-                    expect(xhrs[0].response, 'request status').to.have.property('statusCode', 200)
-                    expect(xhrs[0].request.body.video_data.current_frame, 'request status').to.equal(0)
+          cy.wait(1000).then(() => {
+            video_player_component.go_to_keyframe(65)
 
-                    cy.window().its('AnnotationUIFactory').then(ui_factory => {
-                      expect(ui_factory.annotation_ui_context.current_image_annotation_ctx.unsaved_frames.length).to.equal(0)
-                      let pending_save_frames = Object.keys(ui_factory.annotation_ui_context.current_image_annotation_ctx.instance_buffer_metadata);
-                      for(let key of pending_save_frames){
-                        expect(ui_factory.annotation_ui_context.current_image_annotation_ctx.instance_buffer_metadata[key].pending_save).to.satisfy(val => {
-                          return val === false || val === undefined
-                        });
+          })
+          .then(() => {
+            cy.wait(1500)
+              .get('@annotation_update.all').should('have.length.at.least', 1)
+              .then((xhrs) => {
+                expect(xhrs[0].response, 'request status').to.have.property('statusCode', 200)
+                expect(xhrs[0].request.body.video_data.current_frame, 'request status').to.equal(0)
 
-                      }
+                cy.window().its('AnnotationUIFactory').then(ui_factory => {
+                  expect(ui_factory.annotation_ui_context.current_image_annotation_ctx.unsaved_frames.length).to.equal(0)
+                  let pending_save_frames = Object.keys(ui_factory.annotation_ui_context.current_image_annotation_ctx.instance_buffer_metadata);
+                  for (let key of pending_save_frames) {
+                    expect(ui_factory.annotation_ui_context.current_image_annotation_ctx.instance_buffer_metadata[key].pending_save).to.satisfy(val => {
+                      return val === false || val === undefined
+                    });
 
-                    })
-                  })
-            })
+                  }
+
+                })
+              })
           })
         })
       });

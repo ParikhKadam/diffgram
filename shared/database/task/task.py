@@ -12,6 +12,9 @@ from shared.database.task.task_user import TaskUser
 from shared.database.task.task_event import TaskEvent
 from shared.database.task.task_time_tracking import TaskTimeTracking
 from shared.database.user import User
+from sqlalchemy import union
+import sqlalchemy as sa
+from sqlalchemy import or_, and_
 
 TASK_STATUSES = {
     'created': 'created',
@@ -211,16 +214,37 @@ class Task(Base):
 
     @staticmethod
     def get_task_from_job_id(
-        session,
-        job_id,
-        user,
-        direction = 'next',
-        assign_to_user = False,
-        skip_locked = True):
+            session,
+            job_id,
+            user,
+            direction = 'next',
+            assign_to_user = False,
+            skip_locked = True):
         from methods.task.task.task_update import Task_Update
-        query = session.query(Task).filter(
-            Task.status == 'available',
-            Task.job_id == job_id)
+        from sqlalchemy import union, join
+        # Query for tasks with status 'available'
+        query1 = (
+            session.query(Task)
+            .filter(sa.and_(Task.status == 'available', Task.job_id == job_id))
+        )
+
+        # Query for tasks with status 'in_progress' and assigned to the user
+        query2 = (
+            session.query(Task)
+            .join(TaskUser, Task.id == TaskUser.task_id)
+            .filter(
+                sa.and_(
+                    Task.status == 'in_progress',
+                    Task.job_id == job_id,
+                    TaskUser.user_id == user.id,
+                )
+            )
+        )
+
+        # Combine the results using a union
+        combined_query = query1.union(query2).subquery().alias('task_union')
+
+        query = session.query(Task).select_entity_from(combined_query)
 
         if direction == 'next':
             query = query.order_by(Task.time_created)
@@ -229,8 +253,9 @@ class Task(Base):
             query = query.order_by(Task.time_created.desc())
 
         if skip_locked == True:
-            query = query.with_for_update(skip_locked = True)
-
+            # query = query.with_for_update(skip_locked = True)
+            pass
+        from sqlalchemy import create_engine, text
         task = query.first()
         if assign_to_user is True:
 
@@ -252,9 +277,9 @@ class Task(Base):
         return task
 
     def navigate_tasks_relative_to_given_task(
-        session,
-        task_id,
-        direction = 'next'
+            session,
+            task_id,
+            direction = 'next'
     ):
 
         known_task = Task.get_by_id(session, task_id = task_id)
@@ -275,10 +300,10 @@ class Task(Base):
         return discovered_task
 
     def get_last_task(
-        session,
-        user,
-        status_allow_list = ["available", "in_progress"],
-        job = None):
+            session,
+            user,
+            status_allow_list = ["available", "in_progress"],
+            job = None):
 
         last_task = user.last_task
         if last_task:
@@ -408,13 +433,13 @@ class Task(Base):
             return task_ids_with_issues[index_current + 1]
 
     def request_next_task_by_project(
-        session,
-        project,
-        user,
-        ignore_task_IDS_list = None,
-        status = 'available',
-        skip_locked = True,
-        task_type = None):
+            session,
+            project,
+            user,
+            ignore_task_IDS_list = None,
+            status = 'available',
+            skip_locked = True,
+            task_type = None):
 
         from shared.database.task.job.user_to_job import User_To_Job
         from shared.database.task.job.job import Job
@@ -453,9 +478,9 @@ class Task(Base):
 
     @staticmethod
     def get_file_ids_related_to_a_task(
-        session,
-        task_id,
-        project_id):
+            session,
+            task_id,
+            project_id):
 
         related_tasks_list = session.query(Task).filter(
             Task.id == task_id,
@@ -464,11 +489,11 @@ class Task(Base):
         return allowed_file_id_list
 
     def get_next_available_task_by_job_id(
-        session,
-        job_id,
-        task_type = None,
-        status = 'available',
-        ignore_task_IDS_list = None):
+            session,
+            job_id,
+            task_type = None,
+            status = 'available',
+            ignore_task_IDS_list = None):
         """
         Assumption is we only get tasks == to the status we set
         ie we ignore all other statuses (like archived)
@@ -575,10 +600,10 @@ class Task(Base):
 
     @staticmethod
     def get_by_job_and_file(
-        session,
-        job,
-        file,
-        return_type = 'first'):
+            session,
+            job,
+            file,
+            return_type = 'first'):
 
         query = session.query(Task).filter(
             Task.job_id == job.id,
@@ -589,12 +614,22 @@ class Task(Base):
             return query.first()
 
     @staticmethod
+    def get_related_pending_tasks(session: 'Session', task: 'Task'):
+        query = session.query(Task)
+        query = query.filter(Task.status.notin_(['complete']),
+                             Task.status != 'archived',
+                             Task.id != task.id,
+                             Task.file_id == task.file_id)
+        return query.all()
+
+    @staticmethod
     def list(session,
              task_ids = None,
              status = None,
              date_from = None,
              date_to = None,
              job_id = None,
+             job_id_list = None,
              incoming_directory_id = None,
              file_id = None,
              project_id = None,
@@ -604,7 +639,6 @@ class Task(Base):
              limit_count = 25,
              page_number = 0  # 0 is same as no offset
              ):
-
         query = session.query(Task)
         if task_ids:
             query = query.filter(
@@ -624,6 +658,9 @@ class Task(Base):
             )
         if incoming_directory_id:
             query = query.filter(Task.incoming_directory_id == incoming_directory_id)
+
+        if job_id_list:
+            query = query.filter(Task.job_id.in_(job_id_list))
 
         if job_id:
             query = query.filter(Task.job_id == job_id)
@@ -660,11 +697,14 @@ class Task(Base):
         query = query.order_by(Task.time_created)
 
         if page_number:
-            if page_number < 0: page_number = 0
+            if page_number < 0:
+                page_number = 0
             query = query.offset(page_number * limit_count)
 
-        task_list = query.limit(limit_count).all()
-
+        if limit_count:
+            task_list = query.limit(limit_count).all()
+        else:
+            task_list = query.all()
         task_id_list = [task.id for task in task_list]
         if issues_filter:
             if issues_filter == 'open_issues':
@@ -694,40 +734,61 @@ class Task(Base):
         return task_list
 
     @staticmethod
-    def stats(session, job_id, user_id = None):
+    def stats(session, job_id = None, user_id = None, project_id = None):
         from shared.database.user import User
 
         query = session.query(Task)
-        all_the_tasks_in_job = query.filter(Task.job_id == job_id).all()
+        filter_tasks = Task.job_id == job_id
+        if job_id:
+            filter_tasks = Task.job_id == job_id
 
+        if project_id:
+            filter_tasks = Task.project_id == project_id
+
+        total = query.filter(filter_tasks).count()
+        completed = query.filter(filter_tasks, Task.status == 'complete').count()
+        in_review = query.filter(filter_tasks, Task.status == 'in_review').count()
+        requires_changes = query.filter(filter_tasks, Task.status == 'requires_changes').count()
+        in_progress = query.filter(filter_tasks, Task.status == 'in_progress').count()
+        instances_created = 0
         if user_id:
             query = query.filter(Task.assignee_user_id == user_id)
 
-        total = query.filter(Task.job_id == job_id).count()
-        completed = query.filter(Task.job_id == job_id,
-                                 Task.status == 'complete').count()
-        in_review = query.filter(Task.job_id == job_id,
-                                 Task.status == 'in_review').count()
-        requires_changes = query.filter(Task.job_id == job_id,
-                                        Task.status == 'requires_changes').count()
-        in_progress = query.filter(Task.job_id == job_id,
-                                   Task.status == 'in_progress').count()
-
-        task_id_list = [task.id for task in all_the_tasks_in_job]
         if user_id is None:
-            # Get all the instances created on the tasks. No user filter
-            instances_created = session.query(Instance).filter(
-                Instance.task_id.in_(task_id_list),
-                Instance.soft_delete == False
-            ).count()
+            if job_id:
+                all_the_tasks = query.filter(Task.job_id == job_id).all()
+                task_id_list = [task.id for task in all_the_tasks]
+                # Get all the instances created on the tasks. No user filter
+                instances_created = session.query(Instance).filter(
+                    Instance.task_id.in_(task_id_list),
+                    Instance.soft_delete == False
+                ).count()
+            if project_id:
+                # Get all the instances created on the tasks. No user filter
+                instances_created = session.query(Instance).filter(
+                    Instance.project_id == project_id,
+                    Instance.soft_delete == False
+                ).count()
+
         else:
             # Get all the instances created by the given user
             user = User.get_by_id(session, user_id = user_id)
-            instances_created = session.query(Instance).filter(
-                Instance.task_id.in_(task_id_list),
-                Instance.soft_delete == False,
-                Instance.member_created_id == user.member_id
-            ).count()
+            if job_id:
+                all_the_tasks = query.filter(Task.job_id == job_id).all()
+                task_id_list = [task.id for task in all_the_tasks]
+
+                instances_created = session.query(Instance).filter(
+                    Instance.task_id.in_(task_id_list),
+                    Instance.soft_delete == False,
+                    Instance.member_created_id == user.member_id
+                ).count()
+            if project_id:
+                # Get all the instances created on the tasks. No user filter
+                instances_created = session.query(Instance).filter(
+                    Instance.project_id == project_id,
+                    Instance.soft_delete == False,
+                    Instance.member_created_id == user.member_id
+                ).count()
 
         tasks_stats = {
             "total": total,

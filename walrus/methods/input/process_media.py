@@ -1,5 +1,6 @@
+import uuid
+
 from methods.regular.regular_api import *
-from methods.video.video import New_video
 
 try:
     from methods.video.video_preprocess import Video_Preprocess
@@ -38,7 +39,7 @@ from shared.database.audio.audio_file import AudioFile
 from shared.database.model.model import Model
 from shared.utils import job_dir_sync_utils
 from shared.database.task.job.job import Job
-from tenacity import retry, wait_random_exponential, stop_after_attempt
+from tenacity import retry, wait_random_exponential, stop_after_attempt, wait_fixed
 from shared.database.text_file import TextFile
 from shared.database.task.job.job_working_dir import JobWorkingDir
 from shared.model.model_manager import ModelManager
@@ -62,176 +63,13 @@ from shared.ingest.allowed_ingest_extensions import images_allowed_file_names, \
     csv_allowed_file_names, \
     existing_instances_allowed_file_names
 
+from shared.ingest.prioritized_item import PrioritizedItem
+
+
 data_tools = Data_tools().data_tools
 
 STOP_PROCESSING_DATA = False
 
-
-@dataclass(order = True)
-class PrioritizedItem:
-    # https://diffgram.com/docs/prioritizeditem
-    priority: int
-    input_id: int = field(compare = False, default = None)
-    input: int = field(compare = False, default = None)
-    file_is_numpy_array: bool = field(compare = False, default = False)
-    raw_numpy_image: Any = field(compare = False, default = None)
-    video_id: Any = field(compare = False, default = None)
-    video_parent_file: Any = field(compare = False, default = None)
-    frame_number: Any = field(compare = False, default = None)
-    global_frame_number: Any = field(compare = False, default = None)
-    frame_completion_controller: Any = None
-    total_frames: int = 0
-    num_frames_to_update: int = 0
-    media_type: str = None
-
-
-def process_media_unit_of_work(item):
-    from methods.input.process_media_queue_manager import process_media_queue_manager
-    with sessionMaker.session_scope_threaded() as session:
-
-        process_media = Process_Media(
-            session = session,
-            input_id = item.input_id,
-            input = item.input,
-            item = item)
-
-        if settings.PROCESS_MEDIA_TRY_BLOCK_ON is True:
-            try:
-
-                process_media_queue_manager.add_item_to_processing_list(item)
-                process_media.main_entry()
-                process_media_queue_manager.remove_item_from_processing_list(item)
-
-            except Exception as e:
-                logger.error(f"[Process Media] Main failed on {item.input_id}")
-                logger.error(str(e))
-                logger.error(traceback.format_exc())
-                process_media_queue_manager.remove_item_from_processing_list(item)
-        else:
-            process_media_queue_manager.add_item_to_processing_list(item)
-            process_media.main_entry()
-            process_media_queue_manager.remove_item_from_processing_list(item)
-
-
-# REMOTE queue
-def start_queue_check_loop(VIDEO_QUEUE, FRAME_QUEUE):
-    # https://diffgram.com/docs/remote-queue-start_queue_check_loop
-    from methods.input.process_media_queue_manager import process_media_queue_manager
-    if settings.PROCESS_MEDIA_REMOTE_QUEUE_ON == False:
-        return
-
-    add_deferred_items_time = 5
-
-    while True:
-        time.sleep(add_deferred_items_time)
-        if process_media_queue_manager.STOP_PROCESSING_DATA:
-            logger.warning('Rejected Item: processing, data stopped. Waiting for termination...')
-            break
-
-        check_and_wait_for_memory(memory_limit_float = 85.0)
-
-        logger.info("[Media Queue Heartbeat]")
-        try:
-            add_deferred_items_time = check_if_add_items_to_queue(add_deferred_items_time, VIDEO_QUEUE, FRAME_QUEUE)
-        except Exception as exception:
-            logger.info(f"[Media Queue Failed] {str(exception)}")
-            add_deferred_items_time = 30  # reset
-
-
-def check_if_add_items_to_queue(add_deferred_items_time, VIDEO_QUEUE, FRAME_QUEUE):
-    # https://diffgram.com/docs/remote-queue-check_if_add_items_to_queue
-
-    queue_limit = 1
-    if VIDEO_QUEUE.qsize() >= queue_limit:
-        return add_deferred_items_time
-
-    if FRAME_QUEUE.qsize() >= 30:
-        logger.info(f"FRAME QUEUE LIMIT {str(FRAME_QUEUE.qsize())}")
-        return add_deferred_items_time
-
-    with sessionMaker.session_scope_threaded() as session:
-
-        try:
-            update_input = Update_Input(session = session).automatic_retry()
-        except Exception as exception:
-            logger.error(f"Couldn't find Update_Input {str(exception)}")
-            return 30
-
-        input = session.query(Input).with_for_update(skip_locked = True).filter(
-            Input.processing_deferred == True,
-            Input.archived == False,
-            Input.status != 'success'
-        ).first()
-
-        if input is None:
-            add_deferred_items_time += 30
-            add_deferred_items_time = min(add_deferred_items_time, 200)
-            return add_deferred_items_time
-
-        add_deferred_items_time = 3  # reset, fast process if None available
-        # we trust if video queue is busy it will be handled and not reach to this point
-
-        session.add(input)
-        input.processing_deferred = False
-
-        item = PrioritizedItem(
-            priority = 100,  # 100 is current default priority
-            input_id = input.id)
-        add_item_to_queue(item)
-        logger.info(f"{str(input.id)} Added to queue.")
-
-        return add_deferred_items_time
-
-
-# https://diffgram.com/docs/process-media-local-worker-queues
-
-
-def add_item_to_queue(item):
-    # https://diffgram.com/docs/add_item_to_queue
-    from methods.input.process_media_queue_manager import process_media_queue_manager
-    if item.media_type and item.media_type == "video":
-        process_media_queue_manager.VIDEO_QUEUE.put(item)
-    else:
-        wait_until_queue_pressure_is_lower(
-            queue = process_media_queue_manager.FRAME_QUEUE,
-            limit = process_media_queue_manager.frame_threads * 2,
-            check_interval = 1)
-        process_media_queue_manager.FRAME_QUEUE.put(item)
-
-
-def wait_until_queue_pressure_is_lower(queue, limit, check_interval = 1):
-    while True:
-        if queue.qsize() < limit:
-            return True
-        else:
-            logger.warn(f"Queue Presure Too High: {str(queue.qsize())} size is above limit of {limit} ")
-            time.sleep(check_interval)
-
-
-def process_media_queue_worker(queue, queue_type, frame_queue_lock, video_queue_lock):
-    queue_lock = None
-    if queue_type == 'frame':
-        queue_lock = frame_queue_lock
-    elif queue_type == 'video':
-        queue_lock = video_queue_lock
-    else:
-        logger.error('Invalid queue type')
-        return
-    while True:
-        process_media_queue_getter(queue, queue_lock)
-
-
-def process_media_queue_getter(queue, queue_lock):
-    # https://diffgram.com/docs/process_media_queue_getter
-    queue_lock.acquire()
-    if not queue.empty():
-        item = queue.get()
-        queue_lock.release()
-        process_media_unit_of_work(item)
-        queue.task_done()
-    else:
-        queue_lock.release()
-        time.sleep(0.1)
 
 
 class Process_Media():
@@ -356,35 +194,57 @@ class Process_Media():
         if self.input and not isinstance(self.input, Input):
             raise Exception("input should be class Input object. Use input_id for ints")
 
-    ### TODO move these other main entry things over to init
 
-    @retry(wait = wait_random_exponential(multiplier = 1, max = 5),
-           stop = stop_after_attempt(4))
+    @retry(wait = wait_random_exponential(multiplier = .5, max = 120),
+           stop = stop_after_attempt(30))
     def get_input_with_retry(self):
         """
-        If we already have a valid input object we skip this
-            else get it from DB.
-
-            In general the assumption for deferred processing
-            is that we won't have the object.
-            If processing is using the input "pattern"
-            but needs local (ie 'frame') type
-            then it can have it.
         """
 
-        if self.input is None:
-
+        if self.input:
+           return
+       
+        try:
+            logger.info(f"Getting input {self.input_id}")
             self.input = Input.get_by_id(
                 session = self.session,
                 id = self.input_id)
 
-            # Oracle if get_by_id() failed
-            # Do we want to log this somewhere on 'final' failure?
             if self.input is None:
-                raise Exception('Input not Found.')
+                raise Exception  
+            
+        except Exception as e:
+            logger.warn(f"Unable to fetch input ID: {self.input_id}")
+            self.attempt_reinsert_input()
 
-        if not self.input.update_log:
-            self.input.update_log = regular_log.default()
+
+    @retry(wait = wait_random_exponential(multiplier = 2, max = 1024),
+           stop = stop_after_attempt(50))
+    def attempt_reinsert_input(self):
+        """
+        """
+
+        logger.info("reinsert attempt")
+
+        input = Input.get_by_id(
+                session = self.session,
+                id = self.input_id)
+
+        if not input: raise Exception
+
+        if not input.retry_count:
+            input.retry_count = 1
+        else:
+            input.retry_count += 1
+
+        if input.retry_count < 3:
+            input.status = 'retry/failed_to_fetch_input'
+            input.processing_deferred = True
+            logger.warn(f"Reset procesing status on: {self.input_id}")
+        else:
+            input.status = 'failed'
+            input.description = "failed_to_fetch Adjust Database configs database may be overloaded."
+
 
     def main_entry(self):
         """
@@ -396,15 +256,16 @@ class Process_Media():
 
         check_and_wait_for_memory(memory_limit_float = 85.0)
 
-        ### Warm up
         self.get_input_with_retry()
 
-        # We update this here because
-        # it may be set to retry, but not start processing for a while
-        # So we only want to set this time when we start processing it
+        if self.input is None:
+            logger.error("input is None")
+            return
+
         self.input.time_last_attempted = start_time
 
-        # Jan 20, 2020, TODO can we safely remove self.project
+        if not self.input.update_log:
+            self.input.update_log = regular_log.default()
 
         self.project = self.input.project
 
@@ -433,7 +294,7 @@ class Process_Media():
         self.try_to_commit()
 
         if self.input.mode == "copy_file":
-            self.__copy_file()
+            self.__start_copy_file()
             # Important!
             # We are exiting main loop here
             return
@@ -623,6 +484,9 @@ class Process_Media():
             self.declare_success(input = self.input)
             return
 
+        global New_video  # important
+        from methods.video.video import New_video
+
         # COPY INSTANCES, Sequences, and Frames
         new_video = New_video(
             session = self.session,
@@ -691,7 +555,6 @@ class Process_Media():
 
     def __copy_file(self):
         logger.debug(f"Copying file type: {self.input.media_type} {self.input.file_id}")
-
         self.input.newly_copied_file = File.copy_file_from_existing(
             session = self.session,
             working_dir = None,
@@ -702,13 +565,12 @@ class Process_Media():
             remove_link = self.input.remove_link,
             sequence_map = None,
             previous_video_parent_id = None,
-            flush_session = True
+            flush_session = True,
         )
-
         if self.input.file.type == 'compound':
             child_files = self.input.file.get_child_files(session = self.session)
             for child in child_files:
-                self.input.newly_copied_file = File.copy_file_from_existing(
+                File.copy_file_from_existing(
                     session = self.session,
                     working_dir = None,
                     working_dir_id = self.input.directory_id,
@@ -742,7 +604,7 @@ class Process_Media():
         )
         return self.input.newly_copied_file
 
-    def __copy_file(self):
+    def __start_copy_file(self):
         # Prep work
         if self.input.media_type == "video":
             logger.info(f"Starting Sequenced Copy from File {self.input.file.id}")
@@ -921,7 +783,7 @@ class Process_Media():
 
     def create_task_on_job_sync_directories(self):
         """
-            Given a file list, attach create tasks from those files attached to the given
+            Given a file, attach create tasks from those files attached to the given
             job.
         :param session:
         :param job:
@@ -942,9 +804,10 @@ class Process_Media():
         if self.input.media_type not in ['image', 'video', 'sensor_fusion', 'text', 'audio', 'geospatial']:
             return
 
+        file = self.input.file
         if self.input.file.parent_id is not None:
             # Avoid adding child of a compound file
-            return
+            file = File.get_by_id(session = self.session, file_id = self.input.file.parent_id)
 
         directory = self.input.directory
         if directory is None:
@@ -966,7 +829,7 @@ class Process_Media():
             job_sync_dir_manger.create_file_links_for_attached_dirs(
                 sync_only = True,
                 create_tasks = True,
-                file_to_link = self.input.file,
+                file_to_link = file,
                 file_to_link_dataset = self.working_dir,
                 related_input = self.input,
                 member = self.member
@@ -1216,7 +1079,16 @@ class Process_Media():
     def read_raw_text_file(self):
         # Get Raw file
         self.raw_text_file = open(self.input.temp_dir_path_and_filename, "rb")
-        print(self.raw_text_file)
+        return self.raw_text_file
+
+    def build_file_from_string(self, str_data: str):
+        # Get Raw file
+        import io
+        # create an empty file object for writing
+        file_obj = io.StringIO("")
+        # write to the file object
+        file_obj.write(str_data)
+        self.raw_text_file = file_obj
         return self.raw_text_file
 
     def process_frame(self):
@@ -1430,7 +1302,6 @@ class Process_Media():
         """
         if self.frame_number + 2 == self.input.video_parent_length:
             if self.input.parent_file_id and self.input.video_was_split is None:
-                print("Running sequence update")
                 time.sleep(2)  # just give a little breather while stuff is settling.
                 self.update_sequences()
 
@@ -1439,7 +1310,6 @@ class Process_Media():
     def get_parent_input_with_retry(self):
         """
         """
-        print("ran get_parent_input_with_retry")
 
         parent_input = Input.get_by_id(
             session = self.session,
@@ -1529,6 +1399,7 @@ class Process_Media():
                 project_id = self.project_id,
                 input_id = self.input.id,
                 file_metadata = self.input.file_metadata,
+                ordinal = self.input.ordinal,
             )
 
             if self.input.status != "failed":
@@ -1558,7 +1429,13 @@ class Process_Media():
         """
         try:
             logger.debug(f"Started processing text file from input: {self.input_id}")
-            result = self.read_raw_text_file()
+            if self.input.type == 'from_text_data':
+                result = self.build_file_from_string(str_data = self.input.text_data)
+                raw_text = self.input.text_data
+            else:
+                result = self.read_raw_text_file()
+                raw_text = result.read()
+                raw_text = raw_text.decode('utf-8')
             if not result:
                 logger.error(f"Error reading text file {self.input.temp_dir_path_and_filename}")
             # Why is content_type needed here?
@@ -1585,20 +1462,21 @@ class Process_Media():
                 parent_id = self.input.parent_file_id,
                 text_file_id = self.new_text_file.id,
                 original_filename = self.input.original_filename,
+                ordinal = self.input.ordinal,
                 project_id = self.project_id,
                 input_id = self.input.id,
                 file_metadata = self.input.file_metadata,
                 text_tokenizer = 'nltk'
             )
-            raw_text = result.read()
-            raw_text = raw_text.decode('utf-8')
+
             self.save_text_tokens(raw_text, self.input.file)
             # Set success state for input.
             if self.input.media_type == 'text':
                 if self.input.status != "failed":
                     self.declare_success(self.input)
                 try:
-                    shutil.rmtree(self.input.temp_dir)  # delete directory
+                    if self.input.type != 'from_text_data':
+                        shutil.rmtree(self.input.temp_dir)  # delete directory
                 except OSError as exc:
                     logger.error("shutil error")
                     pass
@@ -1700,6 +1578,7 @@ class Process_Media():
             connection_id = self.input.connection_id,
             bucket_name = self.input.bucket_name,
             file_metadata = self.input.file_metadata,
+            ordinal = self.input.ordinal,
 
         )
         return self.input.file
@@ -1736,9 +1615,13 @@ class Process_Media():
         result = self.read_raw_file()
         if result is False:
             return False
+        if settings.DIFFGRAM_SYSTEM_MODE == 'testing_e2e':
+            self.new_image.url_signed_blob_path = settings.PROJECT_IMAGES_BASE_DIR + \
+                                                  str(self.project_id) + "/" + str(uuid.uuid4()) + "/" + str(self.new_image.id)
 
-        self.new_image.url_signed_blob_path = settings.PROJECT_IMAGES_BASE_DIR + \
-                                              str(self.project_id) + "/" + str(self.new_image.id)
+        else:
+            self.new_image.url_signed_blob_path = settings.PROJECT_IMAGES_BASE_DIR + \
+                                                  str(self.project_id) + "/" + str(self.new_image.id)
 
         self.try_to_commit()
 
@@ -1925,7 +1808,7 @@ class Process_Media():
 
         # Use original file for jpg and jpeg
         extension = str(self.input.extension).lower()
-        if extension in ['.jpg', '.jpeg']:
+        if extension in ['.jpg', '.jpeg', '.webp']:
             new_temp_filename = self.input.temp_dir_path_and_filename
         # If PNG is used check compression
         elif extension == '.png':
@@ -1947,7 +1830,7 @@ class Process_Media():
         else:
             self.input.status = "failed"
             self.input.status_text = f"""Extension: {self.input.extension} not supported yet. 
-                Try adding an accepted extension [.jpg, .jpeg, .png, .bmp, .tif, .tiff] or no extension at all if from cloud source and response header content-type is set correctly."""
+                Try adding an accepted extension [.jpg, .jpeg, .png, .bmp, .tif, .tiff, .webp] or no extension at all if from cloud source and response header content-type is set correctly."""
             self.log['error']['extension'] = self.input.status_text
             return
 
@@ -2025,12 +1908,18 @@ class Process_Media():
 
         # TODO: Please review. On image there's a temp directory for resizing. But I don't feel the need for that here.
         logger.debug(f"Uploading text file from {self.input.temp_dir_path_and_filename}")
-
-        data_tools.upload_to_cloud_storage(
-            temp_local_path = self.input.temp_dir_path_and_filename,
-            blob_path = self.new_text_file.url_signed_blob_path,
-            content_type = "text/plain",
-        )
+        if self.input.type == 'from_text_data':
+            data_tools.upload_from_string(
+                string_data = self.input.text_data,
+                blob_path = self.new_text_file.url_signed_blob_path,
+                content_type = "text/plain",
+            )
+        else:
+            data_tools.upload_to_cloud_storage(
+                temp_local_path = self.input.temp_dir_path_and_filename,
+                blob_path = self.new_text_file.url_signed_blob_path,
+                content_type = "text/plain",
+            )
 
         self.new_text_file.url_signed = data_tools.build_secure_url(self.new_text_file.url_signed_blob_path,
                                                                     new_offset_in_seconds)
@@ -2111,6 +2000,7 @@ class Process_Media():
             True if completed
 
         """
+        from shared.system_startup.start_media_queue import process_media_queue_manager
 
         row_limit = 10000
         with open(self.input.temp_dir_path_and_filename) as csv_file:
@@ -2144,7 +2034,7 @@ class Process_Media():
                 item = PrioritizedItem(
                     priority = 100,
                     input_id = row_input.id)
-                add_item_to_queue(item)
+                process_media_queue_manager.router(item)
 
         # TODO how to handle removing from directory
         # When we end up adding process media things to a queue instead

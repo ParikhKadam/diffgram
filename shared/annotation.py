@@ -37,7 +37,7 @@ from shared.database.video.sequence import Sequence
 from shared.database.external.external import ExternalMap
 from shared.shared_logger import get_shared_logger
 import traceback
-
+from typing import Optional
 logger = get_shared_logger()
 
 
@@ -53,10 +53,10 @@ class Annotation_Update():
     instance_list_existing: list = None
     instance_list_existing_dict: dict = field(default_factory = lambda: {})
     instance_list_kept_serialized: list = field(default_factory = lambda: [])
-    video_data: dict = None
+    video_data: Optional[dict] = None
     project: Project = None  # Note project is Required for get_allowed_label_file_ids()
-    project_id: Project = None  # add project_id for avoiding dettached session on thread processing
-    task: Task = None
+    project_id: int = None  # add project_id for avoiding dettached session on thread processing
+    task: Optional[Task] = None
     complete_task: bool = False
     gold_standard_file = None
     external_auth: bool = False
@@ -77,8 +77,8 @@ class Annotation_Update():
     system_upgrade_hash_changes: list = field(default_factory = lambda: [])
 
     directory = None
-    external_map: ExternalMap = None
-    external_map_action: str = None
+    external_map: Optional[ExternalMap] = None
+    external_map_action: Optional[str] = None
     new_instance_dict_hash: dict = field(default_factory = lambda: {})  # Keep a hash of all
     do_create_new_file = False
     set_parent_instance_list = False
@@ -430,6 +430,7 @@ class Annotation_Update():
 
     # https://diffgram.readme.io/docs/general-annotation-update
 
+    # Tested
     def __post_init__(self):
 
         self.log = regular_log.default()
@@ -457,6 +458,7 @@ class Annotation_Update():
 
         self.refresh_instance_count()
 
+    # Tested
     def instance_template_main(self):
         """
             This is the main flow for creating/updating
@@ -484,6 +486,7 @@ class Annotation_Update():
 
         return self.new_added_instances
 
+    # Tested
     def __check_all_instances_available_in_new_instance_list(self):
         if not self.do_init_existing_instances:
             return True
@@ -493,6 +496,7 @@ class Annotation_Update():
                 new_id_list.append(inst.get('id'))
 
         ids_not_included = []
+
         for instance in self.instance_list_existing:
             # We don't check for soft_deleted instances
             if instance.soft_delete:
@@ -502,9 +506,10 @@ class Annotation_Update():
 
         if len(ids_not_included) > 0:
             frame_numbers_instance_list_new = [x.get('frame_number') for x in self.instance_list_new]
-            logger.error(f"Invalid payload on annotation update missing IDs {ids_not_included}")
-            logger.error(f"Frame Number {self.frame_number}")
-            logger.error(f"frame_numbers_instance_list_new: {frame_numbers_instance_list_new}")
+            logger.error(f"Invalid payload on annotation update. Frontend missing IDs {ids_not_included}")
+            if self.video_mode == True:
+                logger.error(f"Frame Number {self.frame_number}")
+                logger.error(f"frame_numbers_instance_list_new: {frame_numbers_instance_list_new}")
             logger.error(f"File ID {self.file.id}")
             self.log['warning'] = {}
             self.log['warning'][
@@ -534,18 +539,21 @@ class Annotation_Update():
             # return False
         return True
 
+    # Tested
     def append_new_instance_list_hash(self, instance):
         if instance.soft_delete is False:
             self.new_instance_dict_hash[instance.hash] = instance
             return True
         return False
 
+    # Tested
     def order_new_instances_by_date(self):
         self.instance_list_new.sort(
             key = lambda item: (item.get('client_created_time') is not None, item.get('client_created_time')),
             reverse = True)
         return self.instance_list_new
 
+    # Tested
     def annotation_update_main(self):
 
         """
@@ -606,6 +614,7 @@ class Annotation_Update():
     def main(self):
         return self.annotation_update_main()
 
+    # Tested
     def __perform_external_map_action(self):
         if not self.external_map:
             return
@@ -614,6 +623,7 @@ class Annotation_Update():
                 self.external_map.instance = self.instance
                 self.session.add(self.external_map)
 
+    # Tested
     def instance_list_cache_update(self):
         """
         High level idea of caching
@@ -638,7 +648,6 @@ class Annotation_Update():
         """
         if not self.file:
             return
-
         self.file.set_cache_by_key(
             cache_key = 'instance_list',
             value = self.instance_list_kept_serialized
@@ -651,7 +660,7 @@ class Annotation_Update():
             project = self.project
         )
 
-
+    # Tested
     def return_orginal_file_type(self):
         """
         Not a fan of this setup... but at least this way
@@ -723,7 +732,8 @@ class Annotation_Update():
                     task = self.task
                 )
                 self.is_new_file = True
-
+    
+    # Tested
     def detect_and_remove_collisions(self, instance_list):
         result = []
         hashes_dict = {}
@@ -748,7 +758,8 @@ class Annotation_Update():
                 self.session.add(inst)
 
         return result
-
+    
+    # Tested
     def rehash_existing_instances(self, instance_list):
         result = []
         for instance in instance_list:
@@ -1575,6 +1586,7 @@ class Annotation_Update():
             if instance.get('id') == id:
                 return i
 
+    # Tested
     def update_sequence_id_in_cache_list(self, instance):
         """
             Updates the sequences ID in the cache list.
@@ -1590,6 +1602,7 @@ class Annotation_Update():
             if existing_serialized_instance.get('id') == instance.id:
                 existing_serialized_instance['sequence_id'] = instance.sequence_id
 
+    # Tested
     def update_cache_single_instance_in_list_context(self):
         """
         CAUTION this assumes that instance_list_kept_serialized will exist etc
@@ -1681,6 +1694,7 @@ class Annotation_Update():
             self.file = File.copy_file_from_existing(
                 self.session, directory, self.file)
 
+    # Tested
     def add_missing_ids_to_new_relations(self):
 
         for relation_elm in self.new_instance_relations_list_no_ids:
@@ -1702,6 +1716,7 @@ class Annotation_Update():
             instance.hash_instance()
             self.session.add(instance)
 
+    # Tested
     def check_relations_id_existence(self, from_id, to_id, from_ref, to_ref):
         """
             Checks if current instance is a relations and if ID's are available for saving.
@@ -2044,6 +2059,7 @@ class Annotation_Update():
 
             return sequence
 
+    # Tested
     def check_polygon_points_and_build_bounds(self):
         self.instance.x_min = 99999
         self.instance.x_max = 0
@@ -2187,14 +2203,16 @@ def task_annotation_update(
 
     # TODO Why are we adding this to session here? not clear
     session.add(task)
-
+    child_file_save_id = input.get('child_file_save_id')
     project = task.project
 
     instance_list_new = untrusted_input.get('instance_list', None)
     gold_standard_file = untrusted_input.get('gold_standard_file', None)
     try:
-        file = File.get_by_id(session = session, file_id = task.file_id)
-
+        if child_file_save_id is None:
+            file = File.get_by_id(session = session, file_id = task.file_id)
+        else:
+            file = File.get_by_id(session = session, file_id = child_file_save_id)
     except Exception as e:
         trace = traceback.format_exc()
         logger.error(f"File {task.file_id} is Locked")
@@ -2316,10 +2334,12 @@ def annotation_update_web(
     if and_complete is True:
         new_file = new_file.toggle_flag_shared(session)
 
+    member_id = user.member_id if user else None
+
     Event.new(
         session = session,
         kind = "annotation_update",
-        member_id = user.member_id,
+        member_id = member_id,
         project_id = project.id,
         file_id = new_file.id,
         description = f"Changed {str(new_file.count_instances_changed)}"

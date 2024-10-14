@@ -144,6 +144,7 @@ jobs:
       SMTP_PORT: ${{secrets.SMTP_PORT}}
       SMTP_FROM_EMAIL: ${{secrets.SMTP_FROM_EMAIL}}
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+      DOCKER_CONTEXT: true
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
@@ -163,7 +164,7 @@ jobs:
           repository: diffgram/diffgram-helm
       - name: Create Diffgram Version Production From Tag or Branch
         run: |
-          echo "diffgram_version=newrelic-${{ github.ref_name }}" >> $GITHUB_ENV
+          echo "diffgram_version=${{ github.ref_name }}" >> $GITHUB_ENV
 
       - name: Prepare app.yaml for helm chart.
         uses: microsoft/variable-substitution@v1
@@ -172,7 +173,7 @@ jobs:
         env:
           diffgramVersion: ${{ env.diffgram_version }}
           diffgramEdition: opencore
-          diffgramDomain: diffgram.com
+          diffgramDomain: app.diffgram.com
           useCertManager: true
           useTls: true
           dbSettings.dbProvider: azure
@@ -223,20 +224,20 @@ jobs:
           rabbitmq.auth.username: ${{secrets.RABBITMQ_DEFAULT_USER}}
           rabbitmq.auth.password: ${{secrets.RABBITMQ_DEFAULT_PASS}}
           rabbitmq.auth.erlangCookie: ${{secrets.ERLANG_COOKIE}}
-          eventHandlersService.requests.memory: "8G"
-          eventHandlersService.limits.memory: "8G"
-          eventHandlersService.requests.cpu: "1"
-          eventHandlersService.limits.cpu: "1"
-          walrusService.requests.memory: "16G"
-          walrusService.limits.memory: "16G"
-          walrusService.requests.cpu: "4"
-          walrusService.limits.cpu: "4"
-          defaultService.requests.memory: "4G"
-          defaultService.limits.memory: "4G"
-          defaultService.requests.cpu: "2"
-          frontendService.requests.memory: "2G"
-          frontendService.limits.memory: "2G"
-          frontendService.requests.cpu: "1"
+          eventHandlersService.requests.memory: "1G"
+          eventHandlersService.limits.memory: "2G"
+          eventHandlersService.requests.cpu: ".5"
+          eventHandlersService.limits.cpu: ".5"
+          walrusService.requests.memory: "6G"
+          walrusService.limits.memory: "12G"
+          walrusService.requests.cpu: "1"
+          walrusService.limits.cpu: "2"
+          defaultService.requests.memory: "1G"
+          defaultService.limits.memory: "2G"
+          defaultService.requests.cpu: ".5"
+          frontendService.requests.memory: ".5G"
+          frontendService.limits.memory: ".5G"
+          frontendService.requests.cpu: ".25"
           defaultService.numReplicas: 2
           frontendService.numReplicas: 1
           walrusService.numReplicas: 1
@@ -359,7 +360,7 @@ jobs:
           echo "diffgram_version=${{ steps.comment-branch.outputs.head_ref }}" >> $GITHUB_ENV
 
       - name: Inject slug/short variables
-        uses: rlespinasse/github-slug-action@v4
+        uses: rlespinasse/github-slug-action@v4.4.1
         with:
           slug-maxlength: 30
 

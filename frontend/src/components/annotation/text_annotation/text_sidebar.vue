@@ -2,26 +2,39 @@
     <div
         class="wrapper-element"
         :style="`
-            max-height: calc(100vh - ${toolbar_height});
-            min-height: calc(100vh - ${toolbar_height});
+            height: ${sidebar_height}px
             top: ${toolbar_height}
         `"
     >
-        <v-expansion-panels multiple style="width: 350px;" accordion :value="open_panels">
+        <v-expansion-panels multiple style="width: 450px;" accordion :value="open_panels">
+            <v-expansion-panel @change="on_change_expansion(0)">
+              <global_attributes_list
+                v-if="annotation_ui_context.global_attribute_groups_list_compound && annotation_ui_context.global_attribute_groups_list_compound.length > 0"
+                :global_attribute_groups_list="annotation_ui_context.global_attribute_groups_list_compound"
+                :current_global_instance="compound_global_instance"
+                :schema_id="schema_id"
+                :project_string_id="project_string_id"
+                :view_only_mode="false"
+                :title="'Compound Files Attribute'"
+                ref="compound_attributes_list"
+                @attribute_change="compound_global_attribute_change($event)"
+            />
+        </v-expansion-panel>
 
-          <v-expansion-panel @change="on_change_expansion(0)">
+          <v-expansion-panel @change="on_change_expansion(1)">
               <global_attributes_list
                 v-if="global_attribute_groups_list && global_attribute_groups_list.length > 0"
                 :project_string_id="project_string_id"
                 :global_attribute_groups_list="global_attribute_groups_list"
-                :current_global_instance="current_global_instance"
+                :current_global_instance="current_global_instance()"
                 :schema_id="schema_id"
                 :view_only_mode="false"
+                ref="global_attributes_list"
                 @attribute_change="attribute_change($event, true)"
               />
           </v-expansion-panel>
 
-            <v-expansion-panel @change="on_change_expansion(1)" :disabled="!current_instance">
+            <v-expansion-panel @change="on_change_expansion(2)" :disabled="!current_instance">
 
                 <v-expansion-panel-header>
                     <strong>Attributes {{ !current_instance ? "(select instance)" : null }}</strong>
@@ -36,11 +49,12 @@
                         :attribute_group_list_prop="attribute_group_list_prop()"
                         :current_instance="current_instance"
                         @attribute_change="attribute_change($event)"
+                        ref="attributes_list"
                         key="attribute_groups_list"
                     />
                 </v-expansion-panel-content>
             </v-expansion-panel>
-            <v-expansion-panel data-cy="instance-expansion-panel" @change="on_change_expansion(2)">
+            <v-expansion-panel data-cy="instance-expansion-panel" @change="on_change_expansion(3)">
                     <v-expansion-panel-header>
                         <strong>Instances</strong>
                     </v-expansion-panel-header>
@@ -148,6 +162,7 @@ export default Vue.extend({
         global_attributes_list
     },
     props: {
+        sidebar_height: {type: Number, required: true},
         project_string_id: {
             type: String,
             required: true
@@ -174,7 +189,7 @@ export default Vue.extend({
         },
         toolbar_height: {
             type: String,
-            default: '100px'
+            default: '0px'
         },
         loading: {
             type: Boolean,
@@ -184,8 +199,14 @@ export default Vue.extend({
             type: Array,
             default: null
         },
-        current_global_instance: {
-        }
+        annotation_ui_context: {
+            type: Object,
+            required: true
+        },
+        compound_global_instance: {
+            type: Object,
+            default: () => {}
+        },
     },
     data() {
         return {
@@ -281,14 +302,25 @@ export default Vue.extend({
       attribute_change: function(event, is_global = false) {
           this.$emit('on_update_attribute', event, is_global)
       },
+      compound_global_attribute_change: function(attribute){
+        this.$emit('global_compound_attribute_change', attribute)
+      },
+      current_global_instance: function() {
+        if (this.annotation_ui_context.instance_store && this.annotation_ui_context.instance_store.instance_store[this.annotation_ui_context.working_file.id]) {
+            const global_instance = this.annotation_ui_context.instance_store.instance_store[this.annotation_ui_context.working_file.id].global_instance
+
+            return global_instance
+        }
+        return null
+      }
     }
 })
 </script>
 
 <style scoped>
 .wrapper-element {
-    width: 350px;
-    min-width: 350px;
+    width: 450px;
+    min-width: 450px;
     border-right: 1px solid #e0e0e0;
     position: sticky;
     left: 0;

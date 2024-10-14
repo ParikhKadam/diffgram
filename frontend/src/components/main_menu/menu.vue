@@ -2,6 +2,7 @@
   <div v-if="!do_not_show_menu" style="padding: 0">
 
     <v-snackbar
+      v-if="$store.state.error.permission"
       v-model="$store.state.error.permission"
       top
       color="error"
@@ -13,6 +14,7 @@
     </v-snackbar>
 
     <v-snackbar
+      v-if="$store.state.alert.success_refresh"
       v-model="$store.state.alert.success_refresh"
       top
       color="info"
@@ -45,21 +47,11 @@
               <v-toolbar-title data-cy="navbar-logo" class="ml-0 pt-2 pr-3 clickable"
                                @click.ctrl="route_home_new_tab">
 
-                <img src="https://storage.googleapis.com/diffgram-002/public/logo/diffgram_logo_word_only.png"
-                     height="30px"/>
+                <logo :height="30"></logo>
 
               </v-toolbar-title>
             </ahref_seo_optimal>
 
-
-            <div class="hidden-sm-and-down"
-                 v-if="$store.state.user.logged_in != true ">
-
-              <menu_marketing>
-
-              </menu_marketing>
-
-            </div>
             <div v-if="$store.state.user.logged_in == true ">
 
 
@@ -85,15 +77,6 @@
             </div>
 
             <v-spacer></v-spacer>
-
-            <div v-if="$store.state.builder_or_trainer.mode == 'trainer'">
-              <h3 class="pr-3">
-                <v-icon left
-                        color="primary">mdi-professional-hexagon
-                </v-icon>
-                Pro
-              </h3>
-            </div>
 
             <div v-if="$store.state.user.logged_in == true">
               <div v-if="$store.state.builder_or_trainer.mode == 'builder'">
@@ -155,6 +138,7 @@
               tooltip_message="View Pending File Operations"
               class="hidden-sm-and-down"
               @click="open_pending_files_dialog"
+              :disabled="!show_for_user_role"
               color="primary"
               icon="mdi-file-clock"
               v-if="$store.state.builder_or_trainer.mode == 'builder'
@@ -185,7 +169,7 @@
 
                   <template v-slot:activator="{ on }">
                     <v-btn v-on="on"
-                           :disabled="!$store.state.project || !$store.state.project.current.project_string_id"
+                           :disabled="!$store.state.project || !$store.state.project.current.project_string_id || !show_for_user_role"
                            @click="$store.commit('set_user_is_typing_or_menu_open', true)"
                            text
                     >
@@ -244,7 +228,7 @@
                      class="mr-2"
                      @click="contact_us"
                      v-if="$store.state.org
-                     && !$store.state.org.current.id"
+                     && !$store.state.org.current.id && show_for_user_role"
               >
                   Enterprise
               </v-btn>
@@ -265,7 +249,7 @@
               v-if="$store.state.user.logged_in == true
                    && $store.state.system
                    && $store.state.system.is_open_source == false
-                   && !$store.state.org.current.id"
+                   && !$store.state.org.current.id && show_for_user_role"
               @click="go_to_install()"
               outlined
               style="text-transform: none !important;"
@@ -301,9 +285,9 @@
 <script lang="ts">
   import menu_tasks from "./menu_tasks";
   import main_menu_project from "./menu_project";
+  import logo from "../diffgram/logo.vue";
   import pending_files_dialog from "../input/pending_files_dialog";
   import {getProjectList} from "../../services/projectServices";
-  import menu_marketing from './menu_marketing'
   import menu_super_admin from "./menu_super_admin";
 
   import Vue from "vue";
@@ -314,8 +298,8 @@
       main_menu_project,
       menu_tasks,
       pending_files_dialog,
-      menu_marketing,
-      menu_super_admin
+      menu_super_admin,
+      logo
     },
     props: {
       'height': {
@@ -341,6 +325,20 @@
       };
     },
     computed: {
+      show_for_user_role: function(){
+        if(!this.$store.state.user){
+          return false
+        }
+        if(!this.$store.state.user.current){
+          return false
+        }
+        if(this.$store.state.user.current.is_super_admin){
+          return true
+        }
+        const member_id = this.$store.state.user.current.member_id
+        const result = this.$store.getters.member_in_roles(member_id, ['admin', 'editor'])
+        return result
+      },
       user_project_list: function () {
         let user_project_list = this.$store.state.project_list.user_projects_list;
         if (this.$store.state.project && this.$store.state.project.current) {
@@ -443,7 +441,7 @@
       },
       get_avalible_projects: async function () {
         if (!this.$store.state.user || !this.$store.state.user.logged_in) return
-        
+
         this.loading = true
         const response = await getProjectList();
         const project_list = response.data.project_list;

@@ -13,12 +13,14 @@ grammar_definition = """
     array: "[" [VALUE ("," VALUE)*] "]"
     DOT: "."
     AMPERSAND: "&"
-    CNAME: ("_"|LETTER|"&") ("_"|LETTER|DIGIT|"&")*
+    CNAME: ("_"|LETTER|"&"|"?") ("_"|LETTER|DIGIT|"&"|"?")*
     DOUBLE_QUOTED_STRING  : /"[^"]*"/
     SINGLE_QUOTED_STRING  : /'[^']*'/
     %import common.NUMBER
     %import common.LETTER
     %import common.DIGIT
+    %import common.NEWLINE
+    %ignore NEWLINE
     _WHITESPACE: /[ \t]+/ 
     %ignore _WHITESPACE
 """

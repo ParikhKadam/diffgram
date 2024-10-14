@@ -11,14 +11,14 @@ on:
     branches:
       - '**'
   pull_request:
-    types: [ready_for_review]
+    types: [opened, synchronize, ready_for_review]
 jobs:
   Default-Service-Unit-Tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     # Service containers to run with `container-job` test
 
     container:
-      image: python:3.7
+      image: python:3.11.1-bullseye
       options: --user root
       env:
         NODE_ENV: development
@@ -35,6 +35,7 @@ jobs:
         CLOUD_STORAGE_BUCKET: ${{ secrets.CLOUD_STORAGE_BUCKET }}
         ML__CLOUD_STORAGE_BUCKET: ${{ secrets.ML__CLOUD_STORAGE_BUCKET }}
         SERVICE_ACCOUNT_FULL_PATH: /gcp/gcloud-service-key.json
+        DOCKER_CONTEXT: true
     services:
       # Label used to access the service container
       postgres:
@@ -51,6 +52,8 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/setup-python@v3
+        with:
+          python-version: '3.11'
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
@@ -75,8 +78,10 @@ jobs:
       - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
       - run: cp -rf . /__w/diffgram
       - run: cd /__w/diffgram
-      - run: pip install -r default/requirements.txt
-      - run: pip install pytest sqlalchemy-utils
+
+      - run: pip3 install --upgrade pip
+      - run: pip3 install -r default/requirements.txt
+      - run: pip3 install pytest sqlalchemy-utils
       - run: mkdir /gcp
       - run: echo ${{ secrets.GOOGLE_SERVICE_ACCOUNT_ENCODED }} | base64 --decode --ignore-garbage > /gcp/gcloud-service-key.json
       - run: pytest default/tests --junitxml=test-results/junit.xml
@@ -86,10 +91,10 @@ jobs:
         with:
           files: test-results/**/*.xml
   Walrus-Service-Unit-Tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     # Service containers to run with `container-job`
     container:
-      image: thinkwhere/gdal-python:3.7-ubuntu
+      image: ubuntu:22.04
       options: --user root
       env:
         NODE_ENV: development
@@ -126,10 +131,9 @@ jobs:
     steps:
       - uses: actions/setup-python@v3
         with:
-          python-version: '3.7'
-      - run: sed -i -re 's/([a-z]{2}.)?archive.ubuntu.com|security.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
-      - run: apt-get update && apt-get install -y git libffi-dev
-      - run: pip3 install "pip>=20"
+          python-version: '3.11'
+      - run: apt-get update --allow-insecure-repositories && apt-get install -y git libffi-dev ffmpeg python3.11 python3-pip libpq-dev python3.11-venv python3.11-distutils python3.11-dev git python3-setuptools libgdal-dev python3-lxml libxslt-dev
+      - run: pip3 install --upgrade pip
       - run: rm -rf /tmp
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
@@ -169,7 +173,9 @@ jobs:
   Frontend-Unit-Tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
       - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
       - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
@@ -192,8 +198,8 @@ jobs:
           ref: ${{ github.ref_name }}
       - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
       - run: cd frontend
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         with:
-          node-version: "14"
+          node-version: "18"
       - run: yarn --cwd frontend install
       - run: yarn --cwd frontend run test:unit

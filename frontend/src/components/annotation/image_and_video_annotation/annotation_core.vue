@@ -8,21 +8,22 @@
         {{ task_error.task_request }}
       </v-alert>
 
+      <div v-if="working_file && working_file.image && working_file.image.error">
+        <v-alert type="info">
+          {{ working_file.image.error}}
+        </v-alert>
+      </div>
       <v_error_multiple :error="save_error"></v_error_multiple>
       <v_error_multiple :error="image_annotation_ctx.save_multiple_frames_error"></v_error_multiple>
-      <v_error_multiple
-        :error="save_warning"
-        type="warning"
-        data-cy="save_warning"
-      >
+      <v_error_multiple :error="image_annotation_ctx.save_warning"
+                        type="warning"
+                        data-cy="save_warning">
       </v_error_multiple>
       <div fluid v-if="display_refresh_cache_button">
-        <v-btn
-          small
-          color="warning"
-          @click="regenerate_file_cache"
-          :loading="regenerate_file_cache_loading"
-        >
+        <v-btn small
+               color="warning"
+               @click="regenerate_file_cache"
+               :loading="regenerate_file_cache_loading">
           <v-icon>mdi-refresh</v-icon>
           Refresh File Data
         </v-btn>
@@ -74,7 +75,7 @@
       </template>
     </v-snackbar>
     <div v-if="instance_type === 'polygon'">
-      <v-snackbar dismissible type="info" v-model="alert_info_drawing">
+      <v-snackbar v-if="alert_info_drawing" dismissible type="info" v-model="alert_info_drawing">
         To complete polygon click first point again, or
         <kbd>Enter</kbd> key, or hover in turbo mode.
       </v-snackbar>
@@ -107,8 +108,6 @@
         </v-btn>
       </template>
     </v-snackbar>
-
-
     <v-snackbar
       v-if="auto_border_context && auto_border_context.show_snackbar_auto_border"
       v-model="auto_border_context.show_snackbar_auto_border"
@@ -151,9 +150,6 @@
 
     <v-sheet style="outline: none">
       <v-layout style="outline: none">
-        <!-- Left nav -->
-
-
         <v-container v-if="error_no_permissions.data">
           <v_error_multiple
             class="ma-auto"
@@ -185,13 +181,10 @@
         </v-container>
         <div id="annotation" tabindex="0" v-if="!error_no_permissions.data">
           <!-- Must wrap canvas to detect events in this context
-      Careful, the slider needs to be in this context too
-      in order for the canvas render to detect it
-
-      -->
+              Careful, the slider needs to be in this context too
+              in order for the canvas render to detect it -->
 
           <div
-            contenteditable="true"
             :id="`canvas_wrapper_${working_file.id}`"
             style="position: relative"
             @mousemove="mouse_move"
@@ -202,18 +195,16 @@
             :style="canvas_style"
           >
             <!-- Diffgram loading loading your data -->
-            <v-fade-transition :hide-on-leave="true">
-              <v-container v-show="show_place_holder" style="width: 100%">
-                <h2 class="font-weight-light">Loading File...</h2>
-                <v-progress-linear indeterminate></v-progress-linear>
-                <v-img
-                  src="https://storage.googleapis.com/diffgram_public/app/Empty_state_card.svg"
-                  alt=""
-                  style="max-width: 100%; width: 100%"
-                ></v-img>
-                <!-- https://storage.googleapis.com/diffgram_public/app/Copy-of-Loading-Placeholder.png -->
-              </v-container>
-            </v-fade-transition>
+            <v-container v-if="show_place_holder" style="width: 100%">
+              <h2 class="font-weight-light">Loading File...</h2>
+              <v-progress-linear indeterminate></v-progress-linear>
+              <v-img
+                src="https://storage.googleapis.com/diffgram_public/app/Empty_state_card.svg"
+                alt=""
+                style="max-width: 100%; width: 100%"
+              ></v-img>
+              <!-- https://storage.googleapis.com/diffgram_public/app/Copy-of-Loading-Placeholder.png -->
+            </v-container>
             <autoborder_avaiable_alert
               :x_position="canvas_alert_x"
               :y_position="canvas_alert_y"
@@ -270,9 +261,6 @@
               >
               </v_bg>
 
-              <!-- Important, needs at least 1 non dictionary var to trigger
-          reactive changes. ie :x = mouse_position.x -->
-
               <target_reticle
                 :is_active="is_active"
                 :ord="2"
@@ -282,8 +270,7 @@
                 :width="original_media_width"
                 :degrees="degrees"
                 :canvas_element="canvas_element"
-                :canvas_mouse_tools="canvas_mouse_tools"
-                :show="show_target_reticle && is_active"
+                :show="show_target_reticle && is_active && annotation_ui_context && !annotation_ui_context.show_context_menu"
                 :target_colour="
                   current_label_file ? current_label_file.colour : undefined
                 "
@@ -298,7 +285,6 @@
               >
               </target_reticle>
 
-              <!-- Current file -->
               <canvas_instance_list
                 :ord="3"
                 :instance_list="instance_list"
@@ -308,7 +294,7 @@
                 :video_mode="image_annotation_ctx.video_mode"
                 :auto_border_polygon_p1="auto_border_context.auto_border_polygon_p1"
                 :auto_border_polygon_p2="auto_border_context.auto_border_polygon_p2"
-                :issues_list="issues_list"
+                :issues_list="issues_ui_manager.issues_list"
                 :current_frame="image_annotation_ctx.current_frame"
                 :label_settings="label_settings"
                 :current_instance="current_instance"
@@ -382,7 +368,6 @@
                 :video_mode="image_annotation_ctx.video_mode"
                 :is_actively_drawing="is_actively_drawing"
                 :current_frame="image_annotation_ctx.current_frame"
-                :issues_list="issues_list"
                 :label_settings="label_settings"
                 :current_instance="current_instance"
                 :refresh="refresh"
@@ -446,10 +431,11 @@
               :instance_list="instance_list"
               :sequence_list="sequence_list_local_copy"
               :video_mode="image_annotation_ctx.video_mode"
+              :label_file_list="label_list"
               @instance_update="instance_update($event)"
               @share_dialog_open="open_share_dialog"
-              @focus_instance="on_context_menu_click_focus_instance"
-              @stop_focus_instance="on_context_menu_click_stop_focus_instance"
+              @focus_instance="focus_instance({index: $event})"
+              @stop_focus_instance="focus_instance_show_all()"
               @open_issue_panel="$emit('open_issue_panel', $event)"
               @on_click_polygon_unmerge="polygon_unmerge"
               @on_click_polygon_merge="start_polygon_select_for_merge"
@@ -604,7 +590,6 @@ import ghost_instance_list_canvas from "../../vue_canvas/ghost_instance_list";
 import v_bg from "../../vue_canvas/v_bg";
 import v_text from "../../vue_canvas/v_text";
 import target_reticle from "../../vue_canvas/target_reticle";
-import task_status_icons from "../../regular_concrete/task_status_icons";
 import context_menu from "../../context_menu/context_menu.vue";
 import polygon_borders_context_menu from "../../context_menu/polygon_borders_context_menu.vue";
 
@@ -626,7 +611,6 @@ import {v4 as uuidv4} from "uuid";
 import {cloneDeep} from "lodash";
 import {Instance, SUPPORTED_IMAGE_CLASS_INSTANCE_TYPES} from "../../vue_canvas/instances/Instance";
 import userscript from "./userscript/userscript.vue";
-import toolbar from "./toolbar.vue";
 import {InstanceContext} from "../../vue_canvas/instances/InstanceContext";
 import {CanvasMouseTools} from "../../vue_canvas/CanvasMouseTools";
 import pLimit from "p-limit";
@@ -635,12 +619,12 @@ import {File} from "../../../types/files";
 import {update_file_metadata} from "../../../services/fileServices";
 import {getInstanceTemplatesFromProject} from "../../../services/instanceTemplateService.js";
 import {File} from "../../../types/files";
-import task_status from "./task_status.vue"
 import v_sequence_list from "../../video/sequence_list"
 import {
   initialize_instance_object,
   duplicate_instance,
-  duplicate_instance_template, post_init_instance
+  duplicate_instance_template,
+  post_init_instance
 } from '../../../utils/instance_utils.ts';
 import {
   InteractionEvent,
@@ -650,6 +634,7 @@ import {
 import {CoordinatorProcessResult} from "../../vue_canvas/coordinators/Coordinator";
 import {Interaction} from "../../../types/Interaction";
 import {BoxInstance} from "../../vue_canvas/instances/BoxInstance";
+import {GlobalInstance} from "../../vue_canvas/instances/GlobalInstance";
 import {LabelColourMap} from "../../../types/label_colour_map";
 import {CanvasMouseCtx, MousePosition} from "../../../types/mouse_position";
 import {ImageCanvasTransform} from "../../../types/CanvasTransform";
@@ -663,7 +648,8 @@ import {PolygonMergeTool} from "../../vue_canvas/advanced_tools/PolygonMergeTool
 import IssuesAnnotationUIManager from "./../issues/IssuesAnnotationUIManager";
 import {BaseAnnotationUIContext, ImageAnnotationUIContext} from "../../../types/AnnotationUIContext";
 import {AutoBorderContext} from "../../vue_canvas/advanced_tools/PolygonAutoBorderTool";
-import store from '../../../../src/store.js'
+import { HotkeyListener } from "../../../utils/hotkey_listener";
+
 Vue.prototype.$ellipse = new ellipse();
 Vue.prototype.$polygon = new polygon();
 
@@ -691,13 +677,10 @@ export default Vue.extend({
     v_bg,
     v_text,
     target_reticle,
-    task_status_icons,
     context_menu,
     userscript,
-    toolbar,
     ghost_canvas_available_alert,
     qa_carousel,
-    task_status
   },
   props: {
     draw_mode: {
@@ -723,7 +706,6 @@ export default Vue.extend({
     get_userscript: {type: Function, required: true},
     save_loading_frames_list: {type: Array, default: []},
     filtered_instance_type_list_function: {type: Function, default: () => []},
-    save_loading_image: {type: Boolean, default: false},
     loading: {type: Boolean, default: false},
     has_changed: {type: Boolean, default: false},
     annotations_loading: {type: Boolean, default: false},
@@ -742,7 +724,6 @@ export default Vue.extend({
     label_list: {},
     task_mode_prop: {default: null},
     request_save: {},
-    annotator_email: {},
     model_run_id_list: {default: null},
     model_run_color_list: {default: null},
     view_only_mode: {default: false,},
@@ -754,10 +735,20 @@ export default Vue.extend({
     annotation_ui_context: {type: Object as BaseAnnotationUIContext, required: true},
     image_annotation_ctx: {type: Object as ImageAnnotationUIContext, required: true},
     is_active: {type: Boolean, required: true, default: true},
+    annotation_show_event: {default: null},
+    hotkey_listener: {type: Object as HotkeyListener, required: true}
   },
   watch: {
     is_active: function (){
       this.canvas_element.style.cursor = ''
+      if ( !this.hotkeyListenerScope ) {
+        return
+      }
+      if ( this.is_active) {
+        this.hotkey_listener.setScopes([this.hotkeyListenerScope])
+      } else {
+        this.hotkey_listener.removeScope(this.hotkeyListenerScope)
+      }
     },
     global_instance: function(){
       this.$emit('global_instance_changed', this.working_file.id,  this.global_instance)
@@ -784,16 +775,14 @@ export default Vue.extend({
       if (this.working_file.type === "image") {
         this.instance_store.set_instance_list(this.working_file.id, newVal)
         this.instance_store.set_file_type(this.working_file.id, this.working_file.type)
-        this.$emit('instance_list_updated', newVal, this.working_file.id, this.working_file.type)
       }
     },
     instance_buffer_dict: {
       deep: true,
-      handler: function (newVal) {
+      handler: function (newVal, old) {
         if (this.working_file.type === "video") {
           this.instance_store.set_instance_list(this.working_file.id, newVal)
           this.instance_store.set_file_type(this.working_file.id, this.working_file.type)
-          this.$emit('instance_buffer_dict_updated', newVal, this.working_file.id, this.working_file.type)
         }
       },
     },
@@ -876,16 +865,18 @@ export default Vue.extend({
         }
       }
     },
+    annotation_show_event: function (event) {
+      this.annotation_show_activate(event)
+    }
+
   },
   data: function() {
     return {
       degrees: 0,
-      n_key: false,
       mouse_wheel_button: false,
       global_instance: undefined,
 
       locked_editing_instance: null as Instance,
-      current_instance_v2: null as Instance,
       current_interaction: null as Interaction,
       current_drawing_box_instance: new BoxInstance(),
       current_drawing_polygon_instance: new PolygonInstance(),
@@ -894,12 +885,12 @@ export default Vue.extend({
       instance_rotate_control_mouse_hover: null,
       actively_drawing_instance_template: null,
       z_key: false,
+      shift_key: false,
       snapped_to_instance: undefined,
       canvas_wrapper: undefined,
 
       file_cant_be_accessed: null,
       file_cant_be_accessed_error: null,
-      instance_list_global: [],
 
       snackbar_paste_message: '',
       ghost_instance_hover_index: null,
@@ -937,13 +928,11 @@ export default Vue.extend({
       instance_context: new InstanceContext(),
       instance_template_draw_started: false,
       mouse_down_delta_event: {x: 0, y: 0},
-      issues_list: [],
       canvas_alert_x: undefined,
       canvas_alert_y: undefined,
       original_edit_instance: undefined,
       original_edit_instance_index: undefined,
       loading_sequences: false,
-      alt_key: false,
       command_manager: undefined,
 
       show_snackbar_paste: false,
@@ -957,8 +946,6 @@ export default Vue.extend({
       ellipse_hovered_instance: undefined,
       ellipse_hovered_instance_index: undefined,
 
-
-
       drawing_curve: false,
       curve_hovered_point: undefined,
 
@@ -967,8 +954,7 @@ export default Vue.extend({
       user_requested_file_id: null,
 
       instance_clipboard: undefined,
-      media_core_height: 300, // assumes admin mode, minimize "jerk" by defaulting
-      // it takes time for media_core to pass real value, so we want this to be close to real value
+      media_core_height: 0,
       emit_instance_hover: true, // ie can set to true to get hover updates
 
       // Sequence design doc https://docs.google.com/document/d/1EVvPke7Ms25KsmDKpwrQcqB1k6pgB5SNs5WDbwGmLCo/edit#heading=h.oo1xxxn8bkpp
@@ -989,9 +975,6 @@ export default Vue.extend({
       issue_mouse_position: undefined,
 
       lock_point_hover_change: false,
-      save_warning: {},
-
-      magic_nav_spacer: 80,
 
       space_bar: false,
 
@@ -1175,20 +1158,23 @@ export default Vue.extend({
       zoom_canvas: 1,
       error_no_permissions: {},
       snap_to_edges: 5,
-      shift_key: false,
-      ctrl_key: false,
 
       metadata: {
         length: null,
       },
 
       instance_focused_index: null,
+      instance_selection_hotkeys_index: null,
 
       window_width_from_listener: 1280,
       window_height_from_listener: 650,
+      hotkeyListenerScope: null,
     };
   },
   computed: {
+    is_fully_zoomed_out() {
+      return this.image_annotation_ctx.zoom_value === this.canvas_mouse_tools.canvas_scale_global
+    },
     canvas_id: function(){
       return `my_canvas_${this.working_file.id}`
     },
@@ -1295,11 +1281,11 @@ export default Vue.extend({
       if (!this.draw_mode) {
         return false;
       }
-      if (this.annotation_ui_context.show_context_menu) {
-        return false;
-      }
 
       return true;
+    },
+    is_mouse_down() {
+      return this.$store.state.annotation_state.mouse_down
     },
     mouse_computed: function () {
       if (this.$store.state.annotation_state.mouse_down == false) {
@@ -1385,31 +1371,8 @@ export default Vue.extend({
     },
 
     canvas_scale_global() {
-      /* The window size is defined as
-       * window_size = image_size * global_scale
-       * a = b * c
-       * which is equal to
-       * a/b = (b * c)/b
-       * a/b = c   (simplified)
-       * So window_width / image_size = global scale
-       *
-       * Then the question becomes how to set it relative to other elements.
-       * (That's what the extra little number is for)
-       *
-       * For user set, could have a "zoom" slider too. But I think people also sometimes
-       * like setting a number?
-       *
-       * Note that "_setting" is the automatic or user set number,
-       * where as withoout that suffix it's the "internal" system used value.
-       *
-       * Still needs more work in relation to auto components but strong step in direction
-       *
-       * At the moment the user setting thing doesn't really make sense (if auto is working well)
-       * but perhaps in future as we allow more control over how other components
-       * are positioned it will.
-       * Context here is that it's not a "zoom".
-       */
-      // Manual override
+      // https://diffgram.readme.io/docs/canvas_scale_global
+
       if (this.label_settings.canvas_scale_global_is_automatic == false) {
         return this.label_settings.canvas_scale_global_setting;
       }
@@ -1419,53 +1382,40 @@ export default Vue.extend({
 
 
       if (this.original_media_width) {
-        //  TODO rename 'canvas' thing here as it's more like original media width
-        // the 'canvas_scaled' is what's being used for actual canvas stuff?
         image_size_width = this.original_media_width;
         image_size_height = this.original_media_height;
       }
-      // basically the math above does work but it needs right image size
 
-      /*
-       * magic_nav_spacer is
-       * rough space between actual pane size and padding on either side of image.
-       * meant as a reminder to review that concept a bit more closely doesn't quite feel
-       * right yet
-       *
-       * the goal of calculation is to make it relative to left and right panel
-       */
       let toolbar_height = 80;
-      let middle_pane_height, middle_pane_width;
-      if(this.use_full_window){
-        middle_pane_width =
-          this.window_width_from_listener -
-          this.label_settings.left_nav_width -
-          this.magic_nav_spacer;
 
-        middle_pane_height =
-          this.window_height_from_listener -
-          toolbar_height -
-          this.media_core_height -
-          this.magic_nav_spacer;
-
-      } else{
-        middle_pane_width = this.container_width
-        middle_pane_height = this.container_height
-      }
-
-
-
-
-
-      // get media core height
       if (document.getElementById("media_core")) {
         this.media_core_height =
           document.getElementById("media_core").__vue__.height;
       } else {
-        this.media_core_height = 0; // reset eg for task mode
+        this.media_core_height = 0;
       }
       if (this.task) {
-        this.magic_nav_spacer = 0;
+        this.media_core_height = 0;
+      }
+
+      let middle_pane_height, middle_pane_width;
+      if(this.use_full_window){
+
+        let extra_spacer = 60;
+
+        middle_pane_width =
+          this.window_width_from_listener -
+          this.label_settings.left_nav_width -
+          extra_spacer;
+
+        middle_pane_height =
+          this.window_height_from_listener -
+          toolbar_height -
+          this.media_core_height;
+
+      } else{
+        middle_pane_width = this.container_width
+        middle_pane_height = this.container_height
       }
 
       if (this.image_annotation_ctx.video_mode == true) {
@@ -1493,6 +1443,7 @@ export default Vue.extend({
       this.label_settings.canvas_scale_global_setting = new_size;
 
       return new_size;
+
     },
 
     canvas_width_scaled: function (): number {
@@ -1552,12 +1503,7 @@ export default Vue.extend({
     },
 
     current_instance: function () {
-      // QUESTIONs
-      // how do we want to name space this better as we get more instance types
-      // some shared stuff though...
 
-      // we use computed function here since label referecnes this.current_label_file
-      // and this won't work in data dictionary
       if (SUPPORTED_IMAGE_CLASS_INSTANCE_TYPES.includes(this.instance_type)) {
         return this.build_current_instance_class()
       }
@@ -1726,7 +1672,7 @@ export default Vue.extend({
         width: width,
         height: height,
         label_file: this.annotation_ui_context.current_label_file,
-        label_file_id: this.annotation_ui_context.current_label_file.id,
+        label_file_id: this.annotation_ui_context.current_label_file ? this.annotation_ui_context.current_label_file.id : null,
         selected: "false",
         number: number,
         machine_made: false,
@@ -1740,13 +1686,6 @@ export default Vue.extend({
     },
 
     current_label_file_id: function () {
-      /*
-        * Jan 4, we sometimes need the "id" ie for change detection
-          BUT it creates awkward thing that if current_label_file becomes
-          undefined, it crashes interface
-
-          Using this as a workaround into shared computed property
-        */
       if (this.annotation_ui_context.current_label_file) {
         return this.annotation_ui_context.current_label_file.id;
       } else {
@@ -1786,7 +1725,10 @@ export default Vue.extend({
     this.save_watcher();
     this.save_and_complete_watcher();
     this.refresh_video_buffer_watcher();
-    //console.debug("Destroyed")
+
+    this.hotkey_listener.deleteScope(this.hotkeyListenerScope)
+
+    this.cleanUpHotkeys(this.hotkeyListenerScope)
   },
 
   mounted() {
@@ -1794,6 +1736,14 @@ export default Vue.extend({
       window.AnnotationCore = this;
     }
     this.mounted();
+
+    this.hotkeyListenerScope = `image ${this.working_file.hash}`
+
+    this.setupHotkeys(this.hotkeyListenerScope)
+
+    if(this.is_active && this.hotkey_listener) {
+      this.hotkey_listener.setScopes([this.hotkeyListenerScope])
+    }
 
     if (
       this.annotation_ui_context.working_file_list[0].id === this.annotation_ui_context.working_file.id
@@ -1803,6 +1753,212 @@ export default Vue.extend({
   },
   // TODO 312 Methods!! refactor in multiple files and classes.
   methods: {
+
+    cleanUpHotkeys(scope) {
+      this.hotkey_listener.deleteScope(scope)
+      this.hotkey_listener.removeFilter(this.hotkeyListenerFilter)
+    },
+
+    hotkeyListenerFilter() {
+      return !this.annotation_ui_context.show_context_menu
+    },
+
+    setupHotkeys(scope) {
+
+      this.hotkey_listener.addFilter(this.hotkeyListenerFilter)
+
+      this.hotkey_listener.onKeydown({ keys: 's', scope }, () => {
+        this.$emit('save');
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'f', scope }, () => {
+        this.trigger_instance_focus()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'left,a', scope }, () => {
+        this.toggle_shift_frame_left()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'shift+left,shift+a', scope }, () => {
+        this.toggle_file_change_left()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'right,d', scope }, () => {
+        this.toggle_shift_frame_right()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'shift+right,shift+d', scope }, () => {
+        this.toggle_file_change_right()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'shift+t', scope }, () => {
+        this.toggle_instance_transparency()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'shift+o,o', scope }, () => {
+        this.toggle_show_hide_occlusion()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'shift+n', scope }, () => {
+        this.jump_to_next_instance_frame()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'x', scope }, () => {
+        this.reset_drawing()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'shift+c', scope }, () => {
+        this.complete_and_move()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'esc', scope }, () => {
+        this.toggle_escape_key()
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'ctrl+c', scope, platformDependent: true }, () => {
+        this.copy_instance(true)
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'ctrl+v', scope, platformDependent: true }, () => {
+        this.paste_instance(undefined, undefined, this.image_annotation_ctx.current_frame)
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'shift+r', scope }, () => {
+        this.annotation_show_activate(
+          !this.task && this.working_file && this.working_file.id ? 'file' : 'task'
+        )
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'ctrl+z', scope, platformDependent: true }, () => {
+        this.undo();
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'ctrl+y', scope, platformDependent: true }, () => {
+        this.redo();
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'n', scope }, () => {
+        this.force_new_sequence_request = Date.now();
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'h', scope }, () => {
+        this.show_annotations = !this.show_annotations;
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'g', scope }, () => {
+        this.label_settings.show_ghost_instances =
+          !this.label_settings.show_ghost_instances;
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 't', scope }, () => {
+        this.insert_tag_type();
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'r', scope }, () => {
+        const file = this.working_file
+        if ( !file.image ) {
+          return
+        }
+        let current_rotation_degrees = file.image.rotation_degrees
+        current_rotation_degrees += 90
+        if (current_rotation_degrees == 360) {
+          current_rotation_degrees = 0
+        }
+        this.on_image_rotation(current_rotation_degrees);
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'enter', scope }, () => {
+        if (this.instance_type == "polygon") {
+          this.finish_polygon_drawing(event)
+        }
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'ctrl+left', scope, platformDependent: true }, (event) => {
+        this.rotate_instance_selection_hotkeys_index('previous')
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'ctrl+right', scope, platformDependent: true }, () => {
+        this.rotate_instance_selection_hotkeys_index('next')
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'l', scope }, () => {
+        let instance = this.selected_instance
+        if(instance){
+          this.$emit('open_label_change_dialog', instance.id)
+        }
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'space', scope }, () => {
+        if (this.annotation_show_on) {
+          return
+        }
+        this.toggle_pause_play();
+        this.canvas_element.style.cursor = "pointer";
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'del', scope }, () => {
+        this.delete_instance();
+      })
+
+      this.hotkey_listener.onKeydown({ keys: 'z', scope }, () => {
+        this.z_key = true
+      })
+
+      this.hotkey_listener.onKeyup({ keys: 'z', scope }, () => {
+        this.z_key = false
+      })
+
+      this.hotkey_listener.onSpecialKeydown({ keys: 'shift', scope }, () => {
+        this.shift_key = true
+      })
+
+      this.hotkey_listener.onSpecialKeyup({ keys: 'shift', scope }, () => {
+        this.shift_key = false
+      })
+    },
+
+
+    rotate_instance_selection_hotkeys_index: function(dir: string = 'next'){
+      if(this.draw_mode){
+        this.$emit('draw_mode_change', false)
+      }
+      if(this.instance_selection_hotkeys_index == undefined){
+        this.instance_selection_hotkeys_index = 0
+      }
+      else if(this.instance_selection_hotkeys_index < this.instance_list.length - 1){
+        if(dir === 'next'){
+          this.instance_selection_hotkeys_index += 1
+        } else{
+          if(this.instance_selection_hotkeys_index === 0){
+            this.instance_selection_hotkeys_index = this.instance_list.length - 1
+          } else{
+            this.instance_selection_hotkeys_index -= 1
+          }
+
+        }
+
+      } else if(this.instance_selection_hotkeys_index === this.instance_list.length - 1){
+        if(dir === 'next'){
+          this.instance_selection_hotkeys_index = 0
+        } else{
+          this.instance_selection_hotkeys_index -= 1
+        }
+
+      }
+      let instance = this.instance_list[this.instance_selection_hotkeys_index]
+
+      if (SUPPORTED_IMAGE_CLASS_INSTANCE_TYPES.includes(instance.type)) {
+        let annotation_ctx = this.build_ann_event_ctx()
+        let coord_router: ImageAnnotationCoordinatorRouter = this.create_coordinator_router()
+        let coordinator = coord_router.generate_from_instance(instance, instance.type)
+        // Simulate select() interaction
+        let dummyInteractionCtx = new ImageInteractionEvent({annotation_ctx: annotation_ctx})
+        coordinator.select(dummyInteractionCtx)
+      } else{
+        instance.selected = true
+      }
+      this.instance_selected(instance)
+    },
     clear_unsaved: function() {
       this.instance_list = this.annotation_ui_context.instance_store.clear_unsaved(this.working_file.id)
     },
@@ -1887,21 +2043,7 @@ export default Vue.extend({
         'Hold "N" while drawing to mark occluded. Esc to exit.'
       )
     },
-    on_context_menu_click_focus_instance: function (instance_index) {
-      if (this.$refs.instance_detail_list) {
-        this.$refs.instance_detail_list.toggle_instance_focus(instance_index);
-      }
-      this.update_canvas()
 
-    },
-    on_context_menu_click_stop_focus_instance: function (instance_index) {
-      if (this.$refs.instance_detail_list) {
-        this.$refs.instance_detail_list.show_all();
-
-      }
-      this.image_annotation_ctx.zoom_value = this.canvas_mouse_tools.scale;
-      this.update_canvas();
-    },
     on_canvas_scale_global_changed: async function (new_scale) {
       if (!new_scale) {
         return;
@@ -1924,6 +2066,7 @@ export default Vue.extend({
       this.canvas_element.width += 0;
       this.canvas_mouse_tools.canvas_width = this.original_media_width;
       this.canvas_mouse_tools.canvas_height = this.original_media_height;
+      this.refresh_instances_in_viewport(this.instance_list)
 
       await this.$nextTick();
       this.canvas_mouse_tools.reset_transform_with_global_scale();
@@ -1931,17 +2074,18 @@ export default Vue.extend({
       this.update_canvas();
     },
 
-
-    update_label_settings: function (event) {
-      // Add new events individually in toolbar, e.g. @change="$emit('update_something').
-      this.label_settings = event  // this is actually be reference once connected.
-      this.refresh = Date.now();
-    },
     update_smooth_canvas: function (event) {
       if (!this.canvas_element_ctx) {
         return
       }
       this.canvas_element_ctx.imageSmoothingEnabled = event
+    },
+    update_large_annotation_volume_performance_mode: function (event) {
+      if (event === true) {
+        this.set_performance_optimizations_on()
+      } else {
+        this.set_performance_optimizations_off()
+      }
     },
     cancel_merge: function () {
       this.$store.commit("set_instance_select_for_merge", false);
@@ -2031,7 +2175,7 @@ export default Vue.extend({
       const [result] = await regenerate_cache(project_string, file_id, frame_number)
 
       if (result) {
-        this.has_changed = false;
+        this.$emit('set_has_changed', false);
         location.reload();
       }
     },
@@ -2116,8 +2260,7 @@ export default Vue.extend({
     },
     new_global_instance: function () {
 
-      let new_instance = new Instance();
-      new_instance.type = 'global'
+      let new_instance = new GlobalInstance();
       return new_instance
 
     },
@@ -2508,10 +2651,20 @@ export default Vue.extend({
       if (this.instance_hover_index == undefined) {
         return;
       }
-      if (this.instance_list[this.instance_hover_index].creation_ref_id === instance.creation_ref_id && this.instance_list.indexOf(instance) === this.instance_hover_index) {
+      if (instance.type === 'global') {
+        return;
+      }
+      let index = null;
+      for(let i = 0; i <  this.instance_list.length; i++){
+        let inst = this.instance_list[i];
+        if(inst.creation_ref_id === instance.creation_ref_id){
+          index = i
+        }
+      }
+      if (index === this.instance_hover_index) {
+        this.instance_list[this.instance_hover_index].is_hovered = false;
         this.instance_hover_index = null;
         this.instance_hover_type = null;
-
       }
       if (instance.type === 'box' && !instance.selected) {
         let box: BoxInstance = instance
@@ -2521,6 +2674,16 @@ export default Vue.extend({
         poly.set_default_hover_out_style(poly)
       }
     },
+
+    refresh_instances_in_viewport: function (instance_list) {
+
+      if (this.label_settings.large_annotation_volume_performance_mode === false) { return }
+
+      for (let i = 0; i < instance_list.length; i++) {
+        instance_list[i].in_viewport = this.canvas_mouse_tools.check_is_instance_in_viewport(instance_list[i])
+      }
+    },
+
     create_instance_list_with_class_types: function (instance_list) {
       const result = [];
       if (!instance_list) {
@@ -2773,15 +2936,11 @@ export default Vue.extend({
       this.$refs.video_controllers.move_frame(direction)
     },
 
-    hide_context_menu: function () {
-      // search tags: close close_context
+    hide_context_menu: function () {    //  close close_context
       this.annotation_ui_context.show_context_menu = false;
-      // this.emit_instance_hover = false;   // computation optimzation
-      // there's a timing issue with doing this though so leave off for now.
     },
 
     open_context_menu: function () {
-      //this.emit_instance_hover = true;
       this.annotation_ui_context.show_context_menu = true;
       this.update_canvas()
     },
@@ -2835,6 +2994,7 @@ export default Vue.extend({
     },
 
     focus_instance_show_all() {
+      console.log("Stop")
       this.instance_focused_index = null;
       this.snapped_to_instance = undefined;
       this.selected_instance_list = [];
@@ -2965,6 +3125,7 @@ export default Vue.extend({
          *    For the event to propogate this we must set a key
          *    ie :key="attribute_template.id"
          */
+        // TODO: REFACTOR THIS CODE to instance.set_attribute_value() when all instances have class types.
         if (!instance.attribute_groups) {
           instance.attribute_groups = {};
         }
@@ -2980,7 +3141,6 @@ export default Vue.extend({
         instance.attribute_groups[group.id] = value;
 
         if (instance.type === "global") {
-
           this.global_instance = instance
           this.annotation_ui_context.instance_store.set_global_instance(this.working_file.id, this.global_instance)
         }
@@ -3035,19 +3195,40 @@ export default Vue.extend({
 
       return true;
     },
-    created: function () {
+    created: async function () {
       this.update_label_settings_from_schema()
       this.update_user_settings_from_store();
+
       this.annotation_ui_context.command_manager = new CommandManagerAnnotationCore();
       // Initial File Set
       if (this.working_file) {
-        this.on_change_current_file();
+        await this.on_change_current_file();
       } else if (this.task) {
-        this.on_change_current_task();
+        await this.on_change_current_task();
       }
+      if(this.instance_list.length > 100){
+        this.set_performance_optimizations_on()
+      } else {
+        this.set_performance_optimizations_off()
+      }
+      this.$emit('instance_list_updated', this.instance_list, this.working_file.id, this.working_file.type)
+    },
 
+    set_performance_optimizations_on: function () {
+      this.label_settings.large_annotation_volume_performance_mode = true
+
+      this.label_settings.show_text = false;
+      this.label_settings.left_nav_width = 300
 
     },
+
+    set_performance_optimizations_off: function () {
+      this.label_settings.large_annotation_volume_performance_mode = false
+
+      this.label_settings.show_text = true;
+
+    },
+
     update_label_settings_from_schema: function () {
       if (!this.task) {
         return
@@ -3104,15 +3285,6 @@ export default Vue.extend({
         this.update_window_size_from_listener
       );
 
-      // local
-      this.annotation_area.removeEventListener(
-        "keydown",
-        this.keyboard_events_local_down
-      );
-      this.annotation_area.removeEventListener(
-        "keyup",
-        this.keyboard_events_local_up
-      );
       this.canvas_wrapper.removeEventListener("wheel", this.wheel);
     },
 
@@ -3126,15 +3298,7 @@ export default Vue.extend({
       // rather have canvas_wrapper inside this functionsss in case it needs to "refresh" it
 
       this.annotation_area = document.getElementById("annotation");
-      // window.addEventListener("beforeunload", this.warn_user_unload);
-      this.annotation_area.addEventListener(
-        "keyup",
-        this.keyboard_events_local_up
-      );
-      this.annotation_area.addEventListener(
-        "keydown",
-        this.keyboard_events_local_down
-      );
+
       // window.addEventListener("keydown", this.keyboard_events_global_down);
       // document.addEventListener("mousedown", this.mouse_events_global_down);
       // window.addEventListener("keyup", this.keyboard_events_global_up);
@@ -3164,7 +3328,7 @@ export default Vue.extend({
         this.canvas_element,
         this.canvas_scale_global,
         this.original_media_width,
-        this.original_media_height,
+        this.original_media_height
       );
       this.on_canvas_scale_global_changed();
       // assumes canvas wrapper available
@@ -3269,9 +3433,11 @@ export default Vue.extend({
       }
       this.canvas_element_ctx = this.canvas_element.getContext("2d");
 
-      this.update_smooth_canvas(this.label_settings.smooth_canvas)
+      this.refresh_instances_in_viewport(this.instance_list)
 
-      this.$forceUpdate();
+      this.update_smooth_canvas(this.label_settings.smooth_canvas)
+      this.update_large_annotation_volume_performance_mode(this.label_settings.large_annotation_volume_performance_mode)
+      await this.$forceUpdate();
     },
 
     validate_sequences: function () {
@@ -3437,13 +3603,11 @@ export default Vue.extend({
         this.image_annotation_ctx.video_mode = false;
         this.original_media_width = file.image.width;
         this.original_media_height = file.image.height;
-
-        var self = this;
-        this.addImageProcess(file.image.url_signed).then((new_image) => {
-          self.html_image = new_image;
-          self.loading = false;
-          self.refresh = Date.now();
-        });
+        this.canvas_mouse_tools.set_canvas_width_height(this.original_media_width, this.original_media_height)
+        const new_image = await this.addImageProcess(file.image.url_signed);
+        this.html_image = new_image;
+        this.loading = false;
+        this.refresh = Date.now();
       }
 
       if (file.type == "video") {
@@ -3453,7 +3617,7 @@ export default Vue.extend({
 
         this.original_media_width = file.video.width;
         this.original_media_height = file.video.height;
-
+        this.canvas_mouse_tools.set_canvas_width_height(this.original_media_width, this.original_media_height)
         this.$refs.video_controllers.reset_cache();
         await this.$refs.video_controllers.get_video_single_image();
       }
@@ -3479,6 +3643,11 @@ export default Vue.extend({
       this.hide_context_menu();
       this.canvas_mouse_tools.zoom_wheel(event);
       this.image_annotation_ctx.zoom_value = this.canvas_mouse_tools.scale;
+
+      if ( this.instance_hover_index == null ) {
+        this.canvas_element.style.cursor = this.is_fully_zoomed_out ? "default" : "grab";
+      }
+
       this.update_canvas();
     },
 
@@ -3486,6 +3655,9 @@ export default Vue.extend({
       this.canvas_mouse_tools.reset_transform_with_global_scale();
       this.canvas_mouse_tools.scale = this.canvas_mouse_tools.canvas_scale_global;
       this.image_annotation_ctx.zoom_value = this.canvas_mouse_tools.scale;
+      if ( this.instance_hover_index == null ) {
+        this.canvas_element.style.cursor = "default";
+      }
       this.update_canvas();
     },
 
@@ -4009,7 +4181,6 @@ export default Vue.extend({
       return midpoint_hover;
     },
     detect_hover_polygon_midpoints: function () {
-      // https://diffgram.teamwork.com/#/tasks/23511334
 
       if (!this.selected_instance) {
         return;
@@ -4072,7 +4243,7 @@ export default Vue.extend({
         if (this.lock_point_hover_change == false) {
           let hovered_instance = this.instance_list[this.instance_hover_index]
           if (this.canvas_element && (!hovered_instance || !SUPPORTED_IMAGE_CLASS_INSTANCE_TYPES.includes(hovered_instance.type))) {
-            this.canvas_element.style.cursor = "default";
+            this.canvas_element.style.cursor = this.is_fully_zoomed_out ? "default" : "grab";
           }
 
         }
@@ -4085,8 +4256,8 @@ export default Vue.extend({
         this.detect_hover_on_curve_control_points();
 
 
-        // this.detect_nearest_polygon_point();
-        // this.detect_hover_polygon_midpoints();
+        this.detect_nearest_polygon_point();
+        this.detect_hover_polygon_midpoints();
 
         this.detect_issue_hover();
 
@@ -4128,24 +4299,6 @@ export default Vue.extend({
       return false;
     },
     detect_nearest_polygon_point: function () {
-      /*
-       * Caution updates mouse cursor as side effect.
-       */
-
-      // TODO find nearest point
-      // ie if it's interesting "point" type instances or lines?
-      // could just naively loop over it but feels like there has to to be another way
-      // maybe when we are rendering each thing, if the mouse is over it then
-      // could do that? or something more generic here
-
-      /* So what's interesting is that at the moment this runs twice
-       * for a singular point - but it's "generic"
-       * in the sense that it still works
-       * This could probably be similar for lines too?
-       */
-
-      // TODO get a flag from polygon multiple to detect if
-      // Should change to pointer here
       this.polygon_point_hover_index = null;
 
       if (
@@ -4192,15 +4345,18 @@ export default Vue.extend({
       if (this.view_only_mode == true) {
         return;
       }
+      if (!this.issues_ui_manager || !this.issues_ui_manager.issues_list) { return }
       if (
         this.issue_hover_index == undefined ||
         isNaN(this.issue_hover_index)
       ) {
         return;
       } // careful 0 index is ok
-      if (!this.issues_list[this.issue_hover_index]) {
+    
+      if (!this.issues_ui_manager.issues_list[this.issue_hover_index]) {
         return;
       }
+  
       if (this.draw_mode) {
         return;
       }
@@ -4210,7 +4366,7 @@ export default Vue.extend({
       if (this.view_issue_mode && this.instance_select_for_merge) {
         return;
       }
-      const issue = this.issues_list[this.issue_hover_index];
+      const issue = this.issues_ui_manager.issues_list[this.issue_hover_index];
       this.open_view_edit_panel(issue);
     },
 
@@ -4280,27 +4436,6 @@ export default Vue.extend({
         }
       }
 
-    },
-    box_update_position: function (instance, i) {
-      instance.width = instance.x_max - instance.x_min;
-      instance.height = instance.y_max - instance.y_min;
-
-      // Handle inverting origin point
-      if (instance.x_max < instance.x_min) {
-        let x_max_temp = instance.x_max;
-        instance.x_max = instance.x_min;
-        instance.x_min = x_max_temp;
-      }
-
-      if (instance.y_max < instance.y_min) {
-        let y_max_temp = instance.y_max;
-        instance.y_max = instance.y_min;
-        instance.y_min = y_max_temp;
-      }
-
-      instance.status = "updated";
-
-      this.instance_list.splice(i, 1, instance);
     },
 
     move_curve: function (event) {
@@ -5004,6 +5139,7 @@ export default Vue.extend({
 
       this.original_media_width = file.video.width;
       this.original_media_height = file.video.height;
+      this.canvas_mouse_tools.set_canvas_width_height(this.original_media_width, this.original_media_height)
       this.image_annotation_ctx.video_mode = true;
       this.current_video = file.video;
       this.current_video_file_id = file.id;
@@ -5059,7 +5195,6 @@ export default Vue.extend({
       }
 
       this.canvas_wrapper.style.display = "";
-
       await this.get_instances();
       let determineSize = function (width, height, degrees) {
         let w, h;
@@ -5080,7 +5215,7 @@ export default Vue.extend({
       let newSize = determineSize(file.image.width, file.image.height, this.degrees)
       this.original_media_width = newSize.width;
       this.original_media_height = newSize.height;
-
+      this.canvas_mouse_tools.set_canvas_width_height(this.original_media_width, this.original_media_height)
       await this.addImageProcess_with_canvas_refresh(file);
     },
 
@@ -5182,18 +5317,32 @@ export default Vue.extend({
 
         this.canvas_mouse_tools.pan_y(movementY);
       }
+
+      this.refresh_instances_in_viewport(this.instance_list)
+
     },
 
     mouse_move: function (event) {
+
+      const is_panning = this.is_mouse_down
+        && this.instance_hover_index == null
+        && !this.draw_mode
+
       if(!this.is_active){
         return
       }
-      if (this.z_key === true || this.mouse_wheel_button) {
+
+      if ( !this.is_fully_zoomed_out && ( this.z_key === true || this.mouse_wheel_button ) ) {
         this.move_position_based_on_mouse(event.movementX, event.movementY);
         this.canvas_element.style.cursor = "move";
         this.$forceUpdate();
         return;
+      } else if (is_panning && !this.is_fully_zoomed_out ) {
+        this.move_position_based_on_mouse(-event.movementX, -event.movementY);
+        this.canvas_element.style.cursor = "grabbing";
+        this.$forceUpdate();
       }
+
       this.mouse_position = this.mouse_transform(event, this.mouse_position);
 
       this.move_something(event);
@@ -5736,10 +5885,8 @@ export default Vue.extend({
 
 
       }
-
       // For new Refactored instance types
       this.mouse_up_v2_handler(event)
-
     },
     stop_ellipse_resize: function () {
       this.ellipse_hovered_instance = undefined;
@@ -6267,7 +6414,7 @@ export default Vue.extend({
         }
       }
     },
-    create_coordinator_router: function (event: ImageInteractionEvent): ImageAnnotationCoordinatorRouter {
+    create_canvas_mouse_ctx: function(){
       let canvas_mouse_ctx: CanvasMouseCtx = {
         mouse_position: this.mouse_position,
         canvas_element_ctx: this.canvas_element_ctx,
@@ -6276,13 +6423,17 @@ export default Vue.extend({
         instance_selected: () => this.instance_selected,
         instance_deselected: () => this.instance_deselected,
         new_global_instance: () => {
-          return new Instance()
+          return new GlobalInstance()
         },
         mouse_down_delta_event: this.mouse_down_delta_event,
         mouse_down_position: this.mouse_down_position,
         label_settings: this.label_settings,
         canvas_transform: this.canvas_transform
       }
+      return canvas_mouse_ctx
+    },
+    create_coordinator_router: function (event: ImageInteractionEvent): ImageAnnotationCoordinatorRouter {
+      let canvas_mouse_ctx: CanvasMouseCtx = this.create_canvas_mouse_ctx()
       const interaction_generator = new ImageAnnotationCoordinatorRouter(
         event,
         this.instance_hover_index,
@@ -6375,7 +6526,6 @@ export default Vue.extend({
       instance.on('hover_in', this.instance_hovered)
       instance.on('hover_out', this.instance_unhovered)
       this.update_canvas()
-      this.has_changed = true
       this.$emit('set_has_changed', true);
     },
     mouse_down_v2_handler: function (event) {
@@ -6519,13 +6669,10 @@ export default Vue.extend({
 
     },
     get_instances_core: function (response) {
-      // TODO improve to take dict instead of response
 
-      // since may use in other contexts
       this.show_annotations = true
       this.global_instance = null // reset
 
-      // Not sure if a "silent" null check is right here
       if (response.data['file_serialized']) {
         let new_instance_list = this.create_instance_list_with_class_types(
           response.data['file_serialized']['instance_list']
@@ -6536,6 +6683,7 @@ export default Vue.extend({
       this.image_annotation_ctx.loading = false
 
       this.trigger_refresh_with_delay();
+
     },
 
     trigger_refresh_with_delay: function () {
@@ -6551,9 +6699,7 @@ export default Vue.extend({
       }
 
       if (this.$store.getters.is_on_public_project) {
-        url = `/api/project/${this.project_string_id}/file/${String(
-          this.working_file.id
-        )}/annotation/list`;
+        url = `/api/project/${this.project_string_id}/file/${String(this.working_file.id)}/annotation/list`;
 
         const response = await axios.post(url, {
           directory_id:
@@ -6563,7 +6709,8 @@ export default Vue.extend({
         });
         this.get_instances_core(response);
         this.image_annotation_ctx.annotations_loading = false;
-      } else if (this.$store.state.builder_or_trainer.mode == "builder") {
+      }
+      else if (this.$store.state.builder_or_trainer.mode == "builder") {
         if (this.task && this.task.id) {
           if (this.task.id === '-1' || this.task.id === -1) {
             return
@@ -6581,6 +6728,7 @@ export default Vue.extend({
             directory_id:
             this.$store.state.project.current_directory.directory_id,
             job_id: this.job_id,
+            task_child_file_id: this.working_file.id,
             attached_to_job: file.attached_to_job,
           });
           this.get_instances_core(response);
@@ -6652,12 +6800,13 @@ export default Vue.extend({
       } else {
         // Context of Images Only
         await this.get_instance_list_for_image();
-
         this.get_and_set_global_instance(this.instance_list)
       }
       this.add_override_colors_for_model_runs();
+
       this.image_annotation_ctx.annotations_loading = false;
       this.update_canvas();
+
     },
 
     async update_instance_list_from_buffer_or_get_new_buffer(
@@ -6844,7 +6993,8 @@ export default Vue.extend({
 
     },
     annotation_show_activate(show_type) {
-      return
+
+      console.log("Showing annotation show")
       this.annotation_show_on = !this.annotation_show_on
       this.annotation_show_type = show_type
       if (this.$refs.qa_carrousel && this.annotation_show_on) {
@@ -6929,7 +7079,7 @@ export default Vue.extend({
       this.reset_for_file_change_context();
       await this.refresh_attributes_from_current_file(this.working_file);
 
-      this.current_file_updates(this.working_file);
+      await this.current_file_updates(this.working_file);
       await this.prepare_canvas_for_new_file(this.working_file);
 
       this.full_file_loading = false;
@@ -7009,6 +7159,7 @@ export default Vue.extend({
           this.refresh = Date.now();
           this.original_media_width = file.image.width;
           this.original_media_height = file.image.height;
+          this.canvas_mouse_tools.set_canvas_width_height(this.original_media_width, this.original_media_height)
           this.update_canvas();
 
 
@@ -7037,310 +7188,89 @@ export default Vue.extend({
       }
     },
 
-    keyboard_events_local_up: function (event) {
-      // TODO would it be better to have a dictionary or somthing to map this?
-      if (event.keyCode === 46) {
-        // delete
-        this.delete_instance();
+    toggle_instance_transparency: function () {
+      if (this.default_instance_opacity === 1) {
+        this.default_instance_opacity = 0.25;
+      } else {
+        this.default_instance_opacity = 1;
       }
     },
 
-    keyboard_events_local_down: function (event) {
-    },
 
-    set_control_key: function (event) {
-      // Caution used name commands here to that when multiple keys are pressed it still works
-      if (event.ctrlKey == false || event.metaKey == false) {
-        // ctrlKey cmd key
-        this.ctrl_key = false;
-      }
-      if (event.ctrlKey == true || event.metaKey == true) {
-        // ctrlKey cmd key
-        this.ctrl_key = true;
+    toggle_file_change_left() {
+      if (!this.task) {
+        this.change_file("previous");
+      } else {
+        this.$emit("change_task", "previous", this.task, false)
       }
     },
 
-    set_alt_key: function (event) {
-      // Caution used name commands here to that when multiple keys are pressed it still works
-      if (event.keyCode === 18) {
-        // ctrlKey cmd key
-        this.alt_key = false;
+    toggle_shift_frame_left() {
+      if (this.annotation_show_on) {
+        return
       }
-      if (event.keyCode === 18) {
-        // ctrlKey cmd key
-        this.alt_key = true;
+      this.shift_frame_via_store(-1);
+    },
+
+    trigger_instance_focus: function () {
+      if (this.instance_hover_index != undefined) {
+        this.focus_instance({index: this.instance_hover_index})
+      } else {
+        this.focus_instance_show_all()
       }
     },
 
-    // hotkey hotkeys
-    keyboard_events_global_up: function (event) {
-      if (this.$store.state.user.is_typing_or_menu_open == true) {
-        return; // Caution must be near top to prevent when typing
+    toggle_shift_frame_right() {
+      if (this.annotation_show_on) {
+        return
       }
-      let locked_frame_number = this.image_annotation_ctx.current_frame;
+      this.shift_frame_via_store(1);
+    },
 
-      this.set_control_key(event);
-      this.set_alt_key(event);
+    toggle_file_change_right() {
+      if (!this.task) {
+        this.change_file("next");
+      } else {
+        this.$emit("change_task", "next", this.task, false)
+      }
+    },
 
-      if (this.annotation_ui_context.show_context_menu) {
+    toggle_show_hide_occlusion: function () {
+      this.label_settings.show_occluded_keypoints =
+        !this.label_settings.show_occluded_keypoints;
+      this.refresh = new Date();
+    },
+
+    toggle_escape_key: function () {
+      if (this.view_only_mode == true) {
+        return;
+      }
+      if (this.instance_select_for_issue || this.view_issue_mode) {
+        return;
+      }
+      if (this.instance_select_for_merge) {
         return;
       }
 
-      if (event.keyCode === 16) {
-        // shift
-        //
-        this.shift_key = false;
-      }
-
-      if (event.keyCode === 78) {
-        // shift
-        //
-        this.n_key = false;
-      }
-      if (event.keyCode === 90) {
-        this.z_key = false;
-      }
-
-      if (event.keyCode === 72) {
-        // h key
-        this.show_annotations = !this.show_annotations;
-      }
-
-      if (event.key === "n") {
-        this.force_new_sequence_request = Date.now();
-      }
-
-      if (event.key === "g") {
-        this.label_settings.show_ghost_instances =
-          !this.label_settings.show_ghost_instances;
-      }
-
-      if (event.key === "t") {
-        this.insert_tag_type();
-      }
-
-      if (event.key === "r" && !this.alt_key && !this.ctrl_key && !this.shift_key) {
-
-        const file = this.working_file
-        let current_rotation_degrees = file.image.rotation_degrees
-        current_rotation_degrees += 90
-        if (current_rotation_degrees == 360) {
-          current_rotation_degrees = 0
-        }
-        this.on_image_rotation(current_rotation_degrees);
-      }
-
-      if (event.keyCode === 13) {
-        // enter
-        if (this.instance_type == "polygon") {
-          this.finish_polygon_drawing(event)
-        }
-      }
-
-      if (event.keyCode === 32) {
-        // space
-        if (this.annotation_show_on) {
-          return
-        }
-        this.toggle_pause_play();
-        this.space_bar = false;
-        this.canvas_element.style.cursor = "pointer";
-      }
-      if (event.keyCode === 46) {
-        // delete
-        this.delete_instance();
-      }
+      this.edit_mode_toggle(this.draw_mode);
+      this.is_actively_drawing = false;
     },
 
-    may_toggle_instance_transparency: function (event) {
-      if (event.keyCode === 84) {
-        // shift + t
-        if (this.shift_key) {
-          if (this.default_instance_opacity === 1) {
-            this.default_instance_opacity = 0.25;
-          } else {
-            this.default_instance_opacity = 1;
-          }
-        }
-      }
+    jump_to_next_instance_frame() {
+      this.$refs.video_controllers.next_instance();
     },
 
-    may_toggle_file_change_left: function (event) {
-      if (event.keyCode === 37 || event.key === "a") {
-        // left arrow or A
-        if (this.shift_key) {
-          if (!this.task) {
-            this.change_file("previous");
-          } else {
-            this.$emit("change_task", "previous", this.task, false)
-          }
-        } else {
-          if (this.annotation_show_on) {
-            return
-          }
-          this.shift_frame_via_store(-1);
-        }
+    complete_and_move() {
+      if (
+        this.working_file &&
+        this.working_file.ann_is_complete == true ||
+        this.view_only_mode == true
+      ) {
+        return;
       }
+      this.$emit('save', true); // and_complete == true
     },
 
-    may_snap_to_instance: function (event) {
-      if (event.key === "f") {
-        if (this.instance_hover_index != undefined) {
-          this.focus_instance({index: this.instance_hover_index})
-        } else {
-          this.focus_instance_show_all()
-        }
-      }
-    },
-
-    may_toggle_file_change_right: function (event) {
-      if (event.keyCode === 39 || event.key === "d") {
-        // right arrow
-        if (this.shift_key) {
-          if (!this.task) {
-            this.change_file("next");
-          } else {
-            this.$emit("change_task", "next", this.task, false)
-          }
-
-        } else {
-          if (this.annotation_show_on) {
-            return
-          }
-          this.shift_frame_via_store(1);
-        }
-      }
-    },
-
-    may_toggle_show_hide_occlusion: function (event) {
-      if (event.key === "o" || event.key === "O") {
-        this.label_settings.show_occluded_keypoints =
-          !this.label_settings.show_occluded_keypoints;
-        this.refresh = new Date();
-      }
-    },
-
-    may_toggle_escape_key: function (event) {
-      if (event.keyCode === 27) {
-        // Esc
-        if (this.view_only_mode == true) {
-          return;
-        }
-        if (this.instance_select_for_issue || this.view_issue_mode) {
-          return;
-        }
-        if (this.instance_select_for_merge) {
-          return;
-        }
-
-        this.edit_mode_toggle(this.draw_mode);
-        this.is_actively_drawing = false;
-      }
-    },
-
-    may_save: function (event) {
-      if (event.key === "s" && this.shift_key == false) {
-        // save
-        this.$emit('save');
-      }
-    },
-
-    keyboard_events_global_down: function (event) {
-      var ctrlKey = 17,
-        cmdKey = 91,
-        shiftKey = 16,
-        vKey = 86,
-        cKey = 67;
-
-      this.set_control_key(event);
-      this.set_alt_key(event);
-      let frame_number_locked = this.image_annotation_ctx.current_frame;
-      if (this.$store.state.user.is_typing_or_menu_open == true) {
-        return; // this guard should be at highest level
-      }
-      if (event.keyCode === 78) {
-        // shift
-        //
-        this.n_key = true;
-      }
-      if (event.keyCode === shiftKey) {
-        // shift
-        //
-        this.shift_key = true;
-      }
-      if (event.keyCode === 90) {
-        this.z_key = true;
-      }
-      this.may_save(event);
-
-      this.may_snap_to_instance(event);
-
-      this.may_toggle_file_change_left(event);
-      this.may_toggle_file_change_right(event);
-
-      this.may_toggle_instance_transparency(event);
-      this.may_toggle_show_hide_occlusion(event);
-
-      if (event.key === "N") {
-        // shift + n
-        if (this.shift_key) {
-          this.$refs.video_controllers.next_instance();
-        }
-      }
-      if (event.keyCode == 88) {
-        // x key
-        this.reset_drawing();
-      }
-      if (event.keyCode === 67 && this.shift_key) {
-        // c
-
-        if (
-          this.working_file &&
-          this.working_file.ann_is_complete == true ||
-          this.view_only_mode == true
-        ) {
-          return;
-        }
-        if (
-          this.working_file &&
-          this.working_file.ann_is_complete == true ||
-          this.view_only_mode == true
-        ) {
-          return;
-        }
-        this.$emit('save', true); // and_complete == true
-      }
-
-      this.may_toggle_escape_key(event);
-
-      if (event.keyCode === 32) {
-        // space
-
-        event.preventDefault(); // rationale stop space bar from opening focused elements (eg dataset list)
-        this.space_bar = true;
-
-        // we update this directly otherwise it has to wait for mousemove
-        // and that could be confusing
-      }
-      if (this.ctrl_key && event.keyCode == cKey) {
-        this.copy_instance(true);
-      }
-      if (this.ctrl_key && event.keyCode == vKey) {
-        this.paste_instance(undefined, undefined, frame_number_locked);
-      }
-      if (this.shift_key && event.keyCode === 82) { // CTRL + r
-        this.annotation_show_activate(!this.task && this.working_file && this.working_file.id ? 'file' : 'task')
-      }
-      if (event.keyCode === 90 && this.ctrl_key) {
-        // ctrl + z
-        this.undo();
-      }
-
-      if (event.keyCode === 89 && this.ctrl_key) {
-        // ctrl + z
-        this.redo();
-      }
-    },
     reset_drawing: function () {
       if (this.view_only_mode == true) {
         return;
@@ -7443,6 +7373,15 @@ export default Vue.extend({
         this.deselect_instance(instance)
       }
       let pasted_instance = initialize_instance_object(instance_clipboard, this);
+      pasted_instance = post_init_instance(pasted_instance,
+        this.label_file_map,
+        this.canvas_element,
+        this.label_settings,
+        this.canvas_transform,
+        this.instance_hovered,
+        this.instance_unhovered,
+        this.canvas_mouse_tools
+      )
       if (next_frames != undefined) {
         let next_frames_to_add = parseInt(next_frames, 10);
         const frames_to_save = [];
@@ -7598,7 +7537,7 @@ export default Vue.extend({
       // Add new Keyframe Numbers to Sequence from the created instances.
       for (var instance of response.data.added_instances) {
         this.add_keyframe_to_sequence(instance, frame_number)
-        if (instance.action_type == "deleted") {
+        if (instance.type == "deleted") {
           this.$refs.sequence_list.remove_frame_number_from_sequence(
             instance.sequence_id,
             frame_number
@@ -7607,9 +7546,9 @@ export default Vue.extend({
       }
     },
     add_keyframe_to_sequence(instance, frame_number) {
-      if (instance.action_type == "created" ||
-        instance.action_type == "new_instance" ||
-        instance.action_type == "undeleted")      // not 'edited'
+      if (instance.type == "created" ||
+        instance.type == "new_instance" ||
+        instance.type == "undeleted")      // not 'edited'
       {
         this.$refs.sequence_list.add_frame_number_to_sequence(
           instance.sequence_id,

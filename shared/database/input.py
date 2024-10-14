@@ -38,18 +38,12 @@ class Input(Base):
     url = Column(String())
     media_type = Column(String())  # image, frame, video, csv
 
-    #  Why not name this "source"
-    # TODO naming of this attribute could probably be improved.
     type = Column(String())  # ["from_url", "from_video_split", "from_blob_path"]
 
     allow_csv = Column(Boolean())
 
     allow_duplicates = Column(Boolean(), default = False)
 
-    # By default we don't defer processing, but can if needed
-    # At the moment this flag is only used "in flight"
-    # So eventually, in theory, all the flags will be False.
-    # Not sure if that's ok or bad?
     processing_deferred = Column(Boolean(), default = False)
 
     status = Column(String(), default = "init")
@@ -59,6 +53,7 @@ class Input(Base):
     percent_complete = Column(Float, default = 0.0)
 
     description = Column(String())
+    text_data = Column(String())
     size = Column(Integer)
 
     archived = Column(Boolean, default = False)
@@ -119,6 +114,7 @@ class Input(Base):
     task = relationship("Task", foreign_keys = [task_id])
     task_action = Column(String())
 
+    ordinal = Column(Integer, default = 0)
     # Connection ID where the file is stored (if no connection provided will use default storage provider from env vars)
     connection_id = Column(Integer, ForeignKey('connection_base.id'))
     connection = relationship("Connection", foreign_keys = [connection_id])
@@ -152,6 +148,13 @@ class Input(Base):
     batch_id = Column(Integer, ForeignKey('input_batch.id'))
     batch = relationship("InputBatch", foreign_keys = [batch_id])
 
+    # Workflow that triggered the creation of this input
+    workflow_trigger_id = Column(Integer, ForeignKey('workflow.id'))
+    workflow_trigger = relationship("Workflow", foreign_keys = [workflow_trigger_id])
+    # Action that triggered the creation of this input
+    action_trigger_id = Column(Integer, ForeignKey('action.id'))
+    action_trigger = relationship("Action", foreign_keys = [action_trigger_id])
+
     temp_dir = Column(String())
 
     temp_dir_path_and_filename = Column(String())
@@ -174,10 +177,16 @@ class Input(Base):
     member_updated_id = Column(Integer, ForeignKey('member.id'))
     member_updated = relationship("Member", foreign_keys = [member_updated_id])
 
+
     __table_args__ = (
         Index('index__processing_deferred__archived',
               "processing_deferred", "archived",
-              postgresql_where = (archived.is_(True))),
+              postgresql_where = (processing_deferred.is_(True))),
+        Index('index__input_processing_deferred'),
+        Index('index__input_archived'),
+        Index('index__input_status'),
+        Index('index__input_mode'),
+        Index('index__input_project_id')
     )
 
     def parent_input(self, session):
@@ -225,7 +234,9 @@ class Input(Base):
         batch_id: int = None,
         video_split_duration: int = None,
         file_metadata: dict = None,
-        member_created_id: int = None
+        member_created_id: int = None,
+        text_data: str = None,
+        ordinal: int = 0
     ):
         """
         Helps insure not forgetting stuff...
@@ -249,6 +260,7 @@ class Input(Base):
             mode = mode,
             newly_copied_file_id = newly_copied_file_id,
             media_type = media_type,
+            ordinal = ordinal,
             allow_duplicates = allow_duplicates,
             type = type,
             url = url,
@@ -256,6 +268,7 @@ class Input(Base):
             directory_id = directory_id,
             connection_id = connection_id,
             bucket_name = bucket_name,
+            text_data = text_data,
             task_action = task_action,
             source_directory_id = source_directory_id,
             external_map_action = external_map_action,
@@ -344,7 +357,8 @@ class Input(Base):
             'update_log': self.update_log,
             'instance_list': self.instance_list,
             # 'frame_packet_map': self.frame_packet_map,
-            'newly_copied_file_id': self.newly_copied_file_id
+            'newly_copied_file_id': self.newly_copied_file_id,
+            'parent_input_id': self.parent_input_id
         }
 
     def serialize_with_frame_packet(self):

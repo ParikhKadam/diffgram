@@ -2,15 +2,7 @@
   <div>
     <v_error_multiple :error="error" />
     <div v-if="!interface_type || !interface_type && !initializing">
-      <empty_file_editor_placeholder
-        :message="`File ID: ${annotation_ui_context.working_file ? annotation_ui_context.working_file.id : 'N/A'}. File Type: ${annotation_ui_context.working_file ? annotation_ui_context.working_file.type : 'N/A'}`"
-        :title="'Invalid File loaded'"
-      />
-    </div>
-    <div v-else-if="interface_type === 'compound' && annotation_ui_context.working_file_list.length === 0 && !initializing" >
-      <empty_file_editor_placeholder
-        :message="'Try adding child files to this compound file.'"
-        :title="'This compound file has no child files.'" />
+      No Interface Type Defined.
     </div>
     <div v-else-if="!credentials_granted && !initializing">
       <empty_file_editor_placeholder
@@ -33,7 +25,6 @@
     </div>
     <div v-else-if="interface_type === 'sensor_fusion'">
       <sensor_fusion_editor
-        ref="sensor_fusion_editor"
         v-bind="$props"
         v-on="$listeners"
         :ref="`3d_annotation_core_${working_file.id}`"
@@ -41,6 +32,7 @@
     </div>
     <div v-else-if="interface_type === 'text'">
       <text_annotation_core
+        v-if="!changing_file && !changing_task && image_annotation_ctx != undefined"
         v-bind="$props"
         v-on="$listeners"
         :ref="`text_annotation_core_${working_file.id}`"
@@ -55,6 +47,7 @@
     </div>
     <div v-else-if="interface_type === 'audio'">
       <audio_annotation_core
+        v-if="!changing_file && !changing_task && image_annotation_ctx != undefined"
         v-bind="$props"
         v-on="$listeners"
         :ref="`audio_annotation_core_${working_file.id}`"
@@ -300,10 +293,23 @@ export default Vue.extend({
     },
     show_toolbar: {type: Boolean},
     image_annotation_ctx: {type: Object},
-    is_active: {type: Boolean}
+    is_active: {type: Boolean},
+    bulk_mode: {
+      type: Boolean,
+      default: false
+    },
+    search_mode: {
+      type: Boolean,
+      default: false
+    },
+    child_annotation_ctx_list: {
+      type: Array,
+      default: []
+    },
+    annotation_show_event: {default: null},
+    hotkey_listener: { type: Object }
   },
   computed: {
-
     current_interface_ref: function () {
       if (this.interface_type === 'image' || this.interface_type === 'video') {
         return this.$refs.annotation_core

@@ -2,7 +2,7 @@
   <v-navigation-drawer
     permanent
     left
-    style="border-right: 1px solid #e0e0e0;border-top: 1px solid #e0e0e0; height: 89vh"
+    :style="`border-right: 1px solid #e0e0e0;border-top: 1px solid #e0e0e0; height: ${height}px`"
     :width="annotation_ui_context.current_image_annotation_ctx.label_settings.left_nav_width"
   >
 
@@ -15,11 +15,13 @@
                                :model_run_list="annotation_ui_context.model_run_list"
                                :label_file_colour_map="label_file_colour_map"
                                :refresh="annotation_ui_context.refresh"
+                               :root_file="root_file"
                                :per_instance_attribute_groups_list="annotation_ui_context.per_instance_attribute_groups_list"
                                @toggle_instance_focus="$emit('toggle_instance_focus', $event)"
                                @show_all="$emit('focus_instance_show_all', $event)"
                                @update_canvas="$emit('update_canvas', $event)"
                                @instance_update="$emit('instance_update', $event)"
+                               @global_compound_attribute_change="$emit('global_compound_attribute_change', $event)"
                                :video_mode="annotation_ui_context.current_image_annotation_ctx.video_mode"
                                :task="annotation_ui_context.task"
                                :view_only_mode="annotation_ui_context.view_only_mode"
@@ -27,8 +29,10 @@
                                :label_list="label_list"
                                :project_string_id="project_string_id"
                                :global_attribute_groups_list="annotation_ui_context.global_attribute_groups_list"
+                               :global_attribute_groups_list_compound="annotation_ui_context.global_attribute_groups_list_compound"
                                :schema_id="annotation_ui_context.label_schema.id"
                                :current_global_instance="current_global_instance"
+                               :compound_global_instance="compound_global_instance"
                                :draw_mode="annotation_ui_context.current_image_annotation_ctx.draw_mode"
                                :current_frame="annotation_ui_context.current_image_annotation_ctx.current_frame"
                                :current_video_file_id="annotation_ui_context.working_file.id"
@@ -220,8 +224,11 @@ export default Vue.extend({
     label_file_colour_map: {type: Object as LabelColourMap, required: true},
     label_list: {type: Array as LabelFile[], required: true},
     project_string_id: {type: String, required: true},
-    current_global_instance: {type: String, required: true},
-    instance_list: {type: Array as Instance[], required: true, default: ()=>{return[]}},
+    current_global_instance: {type: Object},
+    compound_global_instance: {type: Object},
+    height: {type: Number},
+    root_file: {type: Object},
+    instance_list: {type: Array as Instance[], required: false, default: ()=>{return[]}},
     video_parent_file_instance_list: {type: Array as Instance[], required: true, default: ()=>{return[]}},
   },
   computed: {
@@ -265,7 +272,6 @@ export default Vue.extend({
       this.$emit('clear_selected_instances_image')
     },
     close_view_edit_issue_panel() {
-      console.log('CLOSE VIE EDITT')
       this.annotation_ui_context.issues_ui_manager.current_issue = undefined;
       this.annotation_ui_context.issues_ui_manager.show_modify_an_issue = false;
       this.annotation_ui_context.issues_ui_manager.issue_mouse_position = undefined;

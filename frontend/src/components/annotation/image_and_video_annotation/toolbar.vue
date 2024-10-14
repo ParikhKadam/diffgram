@@ -9,6 +9,7 @@
     style="overflow: hidden; padding: 0; border-bottom: 1px solid #e0e0e0"
   >
     <v-toolbar-items>
+
       <v-chip
         v-if="working_file && working_file.state === 'removed'"
         color="error"
@@ -27,10 +28,7 @@
               :href="'/me'"
             >
               <div class="pt-2 pr-3 clickable">
-                <img
-                  src="https://storage.googleapis.com/diffgram-002/public/logo/diffgram_logo_word_only.png"
-                  height="30px"
-                />
+                <logo :height="30"></logo>
               </div>
             </ahref_seo_optimal>
           </ui_schema>
@@ -67,6 +65,7 @@
       <!-- Undo Redo -->
 
       <div class="d-flex align-center" v-if="show_undo_redo == true && command_manager">
+
         <ui_schema name="undo">
           <standard_button
             :disabled="
@@ -103,6 +102,13 @@
           </standard_button>
         </ui_schema>
       </div>
+
+      <custom-buttons-section
+        v-on="$listeners"
+        :project_string_id="project_string_id"
+        :editing="show_ui_schema_context_menu">
+
+      </custom-buttons-section>
 
       <v-divider v-if="task && task.status !== 'complete'" vertical></v-divider>
 
@@ -462,7 +468,7 @@
         :close_by_button="true"
       >
         <template slot="content">
-          <hotkeys></hotkeys>
+          <hotkeys :is_mac_os="platform === 'mac'"></hotkeys>
         </template>
       </button_with_menu>
 
@@ -487,7 +493,8 @@
       >
         <template slot="content">
           <v-layout class="pb-4">
-            <!-- <div>
+
+            <div>
               <button_with_menu
                 datacy="open-annotation-show-menu"
                 v-if="annotation_show_on !== true"
@@ -535,7 +542,8 @@
                   :bottom="true"
                 />
               </ui_schema>
-            </div> -->
+            </div>
+
             <standard_button
               tooltip_message="Refresh Instances"
               v-if="$store.state.user.current.is_super_admin == true"
@@ -912,6 +920,15 @@
                   </v-checkbox>
 
                   <v-checkbox
+                    label="Large Volume Annotation Performance Mode"
+                    data-cy="label_settings_large_annotation_volume_performance_mode"
+                    v-model="
+                      label_settings_local.large_annotation_volume_performance_mode
+                    "
+                  >
+                  </v-checkbox>
+
+                  <v-checkbox
                     label="On Instance Creation: Advance Sequence Number"
                     data-cy="on_instance_creation_advance_sequence"
                     v-model="
@@ -1032,10 +1049,14 @@ import task_meta_data_card from "./task_meta_data_card.vue";
 import hotkeys from "./hotkeys.vue";
 import task_status from "./task_status.vue"
 import Guided_1_click_mode_selector from "../../instance_templates/guided_1_click_mode_selector.vue";
+import CustomButtonsSection from "../../ui_schema/custom_buttons_section.vue";
+import logo from "../../diffgram/logo.vue";
 
 export default Vue.extend({
   name: "image_and_video_toolbar",
   components: {
+    logo,
+    CustomButtonsSection, // custom-button-section
     Guided_1_click_mode_selector,
     label_select_annotation,
     label_schema_selector,
@@ -1048,6 +1069,9 @@ export default Vue.extend({
     task_status
   },
   props: {
+    platform: {
+      default: 'win',
+    },
     project_string_id: {},
     video_mode: {
       default: false
@@ -1108,6 +1132,7 @@ export default Vue.extend({
     annotation_show_on: {
       type: Boolean,
     },
+    show_ui_schema_context_menu: {type: Boolean, required: true}
   },
   data() {
     return {
@@ -1156,16 +1181,22 @@ export default Vue.extend({
   },
   async mounted() {
     this.label_settings_local = this.label_settings;
-    if(this.working_file && this.working_file.image){
+    if (this.working_file && this.working_file.image) {
       this.rotation_degrees = this.working_file.image.rotation_degrees
     }
-    if(this.task && this.task.file && this.task.file.image){
+    if (this.task && this.task.file && this.task.file.image) {
       this.rotation_degrees = this.task.file.image.rotation_degrees
     }
-    if(this.rotation_degrees == undefined){
+    if (this.rotation_degrees == undefined) {
       this.rotation_degrees = 0
     }
+
     this.loading_instance_type = false;
+    await this.$nextTick();
+
+    if(this.$store.state && this.$store.state.user && this.$store.state.user.settings && this.$store.state.user.settings.last_selected_annotation_tool){
+      this.set_instance_type(this.$store.state.user.settings.last_selected_annotation_tool)
+    }
   },
 
   computed: {

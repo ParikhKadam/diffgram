@@ -1,7 +1,8 @@
 <template>
-  <div v-cloak>
+  <div v-cloak style="height: 100%">
     <v-alert type="success"
              class="ma-0"
+             v-if="focus_mode"
              :value="focus_mode">
       <div class="d-flex flex-column">
         <div class="d-flex">
@@ -14,29 +15,22 @@
       </div>
     </v-alert>
 
-    <ui_schema name="attribute_preview">
-      <attribute_preview
-        v-if="global_attribute_groups_list && global_attribute_groups_list.length > 0 && task"
-        :global_attribute_groups_list="global_attribute_groups_list"
-        :current_instance="current_global_instance"
-        :added_attributes="current_global_instance && current_global_instance.attribute_groups ? Object.keys(current_global_instance.attribute_groups) : []"
-      />
-    </ui_schema>
-
-    <attribute_preview
-      v-if="
-        global_attribute_groups_list && global_attribute_groups_list.length > 0 &&
-        $store.state.user.settings.show_attribute_preview &&
-        !task
-      "
-      :global_attribute_groups_list="global_attribute_groups_list"
-      :current_instance="current_global_instance"
-      :added_attributes="current_global_instance && current_global_instance.attribute_groups ? Object.keys(current_global_instance.attribute_groups) : []"
-    />
 
     <div class="d-flex flex-column">
 
-      <div v-if="render_mode=='gold_standard'">Gold standard instances</div>
+      <global_attributes_list
+        data-cy="global-attributes-compound-list"
+        v-if="global_attribute_groups_list_compound && global_attribute_groups_list_compound.length > 0 && root_file.type === 'compound'"
+        :global_attribute_groups_list="global_attribute_groups_list_compound"
+        :current_global_instance="compound_global_instance"
+        :schema_id="schema_id"
+        :project_string_id="project_string_id"
+        :view_only_mode="view_only_mode"
+        :task="task"
+        ref="compound_attributes_list"
+        @attribute_change="compound_global_attribute_change($event)"
+        :title="'Compound Files Attribute'"
+      />
 
       <global_attributes_list
         v-if="global_attribute_groups_list && global_attribute_groups_list.length > 0"
@@ -45,15 +39,23 @@
         :schema_id="schema_id"
         :project_string_id="project_string_id"
         :view_only_mode="view_only_mode"
+        :task="task"
+        ref="global_attributes_list"
         @attribute_change="global_attribute_change($event)"
       />
 
-      <v-divider v-if="attribute_group_list_computed.length != 0 || (current_instance && current_instance.attribute_groups)"></v-divider>
+      <v-divider v-if="attribute_group_list_computed.length != 0 || (current_instance && current_instance.attribute_groups && Object.keys(current_instance.attribute_groups) > 0)"></v-divider>
+      <v-divider v-if="attribute_group_list_computed.length != 0 || (current_instance && current_instance.attribute_groups && Object.keys(current_instance.attribute_groups) > 0)"></v-divider>
+
+      <v-chip x-small v-if="label_settings.large_annotation_volume_performance_mode == true && instance_list_count > 0"
+                      class="justify-center">
+        {{ instance_list_count }} Annotations
+      </v-chip>
 
       <v-expansion-panels
-        v-if="attribute_group_list_computed.length != 0 || (current_instance && current_instance.attribute_groups)"
+        v-if="attribute_group_list_computed.length != 0 || (current_instance && current_instance.attribute_groups && Object.keys(current_instance.attribute_groups) > 0)"
         v-model="instance_detail_open"
-        accordion                         
+        accordion
         :tile="true"
         :focusable="true"
         :hover="true"
@@ -87,6 +89,7 @@
               :current_instance="current_instance"
               @attribute_change="attribute_change($event)"
               key="attribute_groups_list"
+              ref="attributes_list"
             >
             </attribute_group_list>
 
@@ -122,7 +125,10 @@
               </v-btn>
           </v-expansion-panel-header>
 
-          <v-expansion-panel-header class="d-flex justify-start pa-0 pb-2 sidebar-accordeon-header align-center">
+
+          <v-expansion-panel-header
+                v-if="label_settings.large_annotation_volume_performance_mode == false"
+                class="d-flex justify-start pa-0 pb-2 sidebar-accordeon-header align-center">
 
             <v-icon left class="ml-5 flex-grow-0" color="primary" size="18">
               mdi-brush
@@ -138,13 +144,17 @@
           </v-expansion-panel-header>
 
           <v-expansion-panel-content class="ml-2">
+
             <v-chip v-if="current_instance
                       && current_instance.id
-                      && $store.state.user.settings.show_ids == true" x-small class="ma-2" color="secondary">
+                      && $store.state.user.settings.show_ids == true " x-small class="ma-2" color="secondary">
               <span class="font-weight-bold mr-2">Selected: </span> <span>{{ current_instance.id }}</span>
             </v-chip>
+
             <v-data-table v-if="grouped_list &&
-                                    grouped_list.instance_list.length > 0"
+                                grouped_list.instance_list.length > 0 &&
+                                label_settings.large_annotation_volume_performance_mode == false"
+
                           style="overflow-y:auto; max-height: 450px"
                           :headers="header"
                           :items="grouped_list.instance_list"
@@ -399,11 +409,13 @@
                       <!-- Edit label
                          For images only
                         -->
-                      <div v-if="data_table_hover_index == props.item.instance_list_index
+                      <div v-show="data_table_hover_index == props.item.instance_list_index
                         || data_table_inner_menu_open == true
                         && data_table_hover_click_index == props.item.instance_list_index ">
                         <button_with_menu
+                          :ref="`change_label_button_instance_${props.item.id}`"
                           v-if="video_mode != true"
+                          :commit_menu_status="true"
                           @menu_open="data_table_inner_menu_open = $event,
                                   data_table_hover_click_index=props.item.instance_list_index"
                           tooltip_message="Change Label Template"
@@ -416,6 +428,7 @@
                             <v-layout column>
 
                               <label_select_only
+                                :enable_hotkeys="true"
                                 :label_file_list_prop=label_list
                                 :select_this_id_at_load=props.item.label_file_id
                                 @label_file="instance_update(
@@ -517,6 +530,7 @@
       </v-expansion-panels>
 
       <v-alert type="warning"
+               v-if="label_settings.show_removed_instances"
                :value="label_settings.show_removed_instances == true">
         Showing removed.
       </v-alert>
@@ -534,7 +548,6 @@ import rating_review from './rating_review.vue'
 import attribute_group_list from '../../attribute/attribute_group_list.vue';
 import label_select_only from '../../label/label_select_only.vue'
 import global_attributes_list from '../../attribute/global_attributes_list.vue'
-import attribute_preview from "../../base/attribute_preview.vue"
 
 export default Vue.extend({
     name: 'instance_detail_list',
@@ -542,8 +555,7 @@ export default Vue.extend({
       rating_review,
       attribute_group_list,
       label_select_only,
-      global_attributes_list,
-      attribute_preview
+      global_attributes_list
     },
     // TODO defaults with dicts here
     props: [
@@ -566,10 +578,14 @@ export default Vue.extend({
       'trigger_refresh_current_instance',  // null or Date.now()  number,
       'current_file',
       'global_attribute_groups_list',
+      'global_attribute_groups_list_compound',
       'current_global_instance',
       'schema_id',
       'per_instance_attribute_groups_list',
-      'video_parent_file_instance_list'
+      'video_parent_file_instance_list',
+      'compound_global_instance',
+      'root_file',
+
 
     ],
     watch: {
@@ -592,7 +608,6 @@ export default Vue.extend({
       },
 
       trigger_refresh_current_instance: function () {
-        console.log('Trigger refresh current instance', this.instance_list, this.external_requested_index)
         if (this.instance_list) {
           this.change_instance(
             this.instance_list[this.external_requested_index],
@@ -710,7 +725,6 @@ export default Vue.extend({
         if(this.video_mode){
           instance_list = this.video_parent_file_instance_list
         }
-        console.log('VIDEO', this.video_mode, this.video_parent_file_instance_list)
         for(let i = 0; i < instance_list.length; i++){
           let inst = instance_list[i]
           if(inst.type === 'global'){
@@ -741,6 +755,12 @@ export default Vue.extend({
         if(this.instance_list == undefined){
           return
         }
+        // TODO: Optimize to support model runs and avoid doing a filter on the code below.
+        if(this.instance_list.length > 300){
+          return [{model_run: null, instance_list: this.instance_list}]
+        }
+
+
         const instance_list = this.instance_list.map((inst, i) => ({
           ...inst,
           instance_list_index: i
@@ -787,7 +807,7 @@ export default Vue.extend({
           let file_id_list = elm.label_file_list.map(label_file => label_file.id)
           return file_id_list.includes(this.current_instance.label_file.id)
         })
-        return attr_group_list;
+        return attr_group_list.sort((a, b) => a.ordinal - b.ordinal);;
 
       },
 
@@ -831,6 +851,16 @@ export default Vue.extend({
 
     },
     methods: {
+      open_change_label_menu: function(instance_id: number){
+        let ref_str = `change_label_button_instance_${instance_id}`;
+        let button = this.$refs[ref_str]
+
+        if(button){
+          button[0].open_menu()
+        }
+
+
+      },
       set_instance_index_numbers: function () {
         if(this.instance_list == undefined){
           return
@@ -996,9 +1026,10 @@ export default Vue.extend({
         )
 
       },
-
+      compound_global_attribute_change: function(attribute){
+        this.$emit('global_compound_attribute_change', attribute)
+      },
       global_attribute_change: function (attribute) {
-        console.log('global_attribute_change current_global_instance_index', this.current_global_instance_index)
         this.instance_update(
           "attribute_change",
           this.current_global_instance_index,

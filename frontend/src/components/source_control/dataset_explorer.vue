@@ -199,7 +199,7 @@
   import tag_select from '@/components/tag/tag_select.vue'
   import label_schema_selector from "../label/label_schema_selector.vue"
   import attribute_select from "../attribute/attribute_select.vue"
-import { attribute_group_list } from "../../services/attributesService";
+import { attribute_group_list } from "../../services/attributesService.ts";
 import { get_file_signed_url } from "../../services/fileServices.ts";
 import dataset_selector from "../attached/global_dataset_selector.vue"
 
@@ -600,6 +600,7 @@ export default Vue.extend({
         this.infinite_scroll_loading = true;
       }
       try{
+        this.query_error = {}
         this.none_found = undefined
         if (this.cancel_request){
           this.cancel_request.cancel()
@@ -627,12 +628,14 @@ export default Vue.extend({
             this.file_list = response.data.file_list;
           }
           else{
+            // TODO clarify point of this block relative to concat
             for(const file in response.data.file_list){
               if(!this.file_list.find(f => f.id === file.id)){
                 this.file_list.push(file);
               }
             }
             this.file_list = this.file_list.concat(response.data.file_list);
+            this.file_list = this.file_list.filter((file) => typeof file === 'object')
           }
         }
         this.metadata_previous = response.data.metadata;
@@ -642,8 +645,8 @@ export default Vue.extend({
 
       }
       catch (error) {
-        console.error(error)
         if (error.toString() !== 'Cancel'){
+          console.error(error)
           this.query_error = this.$route_api_errors(error)
         }
       }
@@ -675,7 +678,9 @@ export default Vue.extend({
     },
     reset_file_selected: function(){
       for (let file_elm of this.file_list) {
-        file_elm.selected = false;
+        if (typeof file_elm === 'object') {
+          file_elm.selected = false;
+        }
       }
       this.selected_files = []
     },

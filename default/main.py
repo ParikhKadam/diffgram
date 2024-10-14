@@ -62,7 +62,7 @@ def log_request_info():
         else:
             out = request.get_json(force = True)
         out['path'] = request.path  # Because may not log in line with normal path printing.
-        logger.info(out)
+        logger.debug(out)
     except Exception as e:
         print(f"[Default] {request.path} Warning: Failed to log request payload. Request is not in JSON ", e)
         print(f"out: {request.data}")
@@ -142,9 +142,11 @@ startup_checker.execute_startup_checks()
 print("Startup in", time.time() - start_time)
 from swagger_setup import setup_swagger
 try:
-    setup_swagger(app)
-except:
-    logger.warning('Failed to generate swagger spec')
+    path = setup_swagger(app)
+    logger.info(f'Generated Swagger spec: {path}')
+except Exception as e:
+    data = traceback.format_exc()
+    logger.warning(f'Failed to generate swagger spec: {data}')
 # Debug
 if __name__ == '__main__':
 

@@ -100,7 +100,8 @@ def new_external_export(
             working_dir_id = working_dir.id,
             limit = None,
             root_files_only = True,
-            ann_is_complete = export.ann_is_complete
+            ann_is_complete = export.ann_is_complete,
+            include_children_compound = True
         )
 
     result, annotations = annotation_export_core(
@@ -266,19 +267,20 @@ def annotation_export_core(
             project = project)
 
         for index, file in enumerate(file_list):
+            try:
+                packet = build_packet(
+                    file = file,
+                    session = session)
 
-            packet = build_packet(
-                file = file,
-                session = session)
+                annotations[file.id] = packet
 
-            annotations[file.id] = packet
+                export.percent_complete = (index / export.file_list_length) * 100
 
-            export.percent_complete = (index / export.file_list_length) * 100
-
-            if index % 10 == 0:
-                logger.info(f"Percent done {export.percent_complete}")
-                try_to_commit(session = session)  # push update
-
+                if index % 10 == 0:
+                    logger.info(f"Percent done {export.percent_complete}")
+                    try_to_commit(session = session)  # push update
+            except Exception as e:
+                declare_export_failed(export = export, reason = str(e), session = session)
     export.status = "complete"
     export.percent_complete = 100
 
@@ -327,8 +329,15 @@ def build_packet(file,
 
 def build_compound_file_packet(file: File, session: Session):
     child_files = file.get_child_files(session = session)
+    instance_list = Instance.list(
+        session = session,
+        file_id = file.id)
+    instance_dict_list = []
+    for instance in instance_list:
+        instance_dict_list.append(build_instance(instance, file))
     result = {
-        'file': file.serialize_base_file()
+        'file': file.serialize_base_file(),
+        'instance_list': instance_dict_list
     }
     for child_file in child_files:
         result[child_file.id] = build_packet(file = child_file,

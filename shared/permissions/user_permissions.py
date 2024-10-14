@@ -13,7 +13,7 @@ class User_Permissions():
 
 
     """
-
+    @staticmethod
     def general(user, apis_user_list):
 
         if user.security_disable_global is True:
@@ -51,5 +51,5 @@ class User_Permissions():
                 return True
 
         # Default case
-        if getattr(user, api_to_check) is not True:
+        if not hasattr(user, api_to_check) or getattr(user, api_to_check) is not True:
             raise Forbidden("API not enabled.")

@@ -15,7 +15,6 @@ from shared.utils.job_launch_utils import task_template_label_attach
 from shared.utils.source_control.file.file_transfer_core import file_transfer_core
 import random
 import uuid
-import uuid
 from shared.regular import regular_log
 
 data_gen_spec_list = [
@@ -312,7 +311,7 @@ class DiffgramDataMocker:
                     User.is_super_admin == True
                 ).first()
                 member = admin.member
-            label_name = f"Diffgram Sample Label {i + 1}"
+            label_name = f"Example_Label_{i + 1}"
             label = self.session.query(Label).filter(
                 Label.name == label_name).first()
             if label:

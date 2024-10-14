@@ -74,9 +74,11 @@ class FilePolicyEnforcer(BasePolicyEnforcer):
         member = Member.get_by_id(session = self.session, member_id = member_id)
         allowed_project_roles = [ProjectDefaultRoles.viewer.value,
                                  ProjectDefaultRoles.editor.value,
+                                 ProjectDefaultRoles.annotator.value,
                                  ProjectDefaultRoles.admin.value]
         if perm != FilePermissions.file_view:
             allowed_project_roles = [ProjectDefaultRoles.editor.value,
+                                     ProjectDefaultRoles.annotator.value,
                                      ProjectDefaultRoles.admin.value]
         perm_result: PermissionResult = self.policy_engine.member_has_any_project_role(member = member,
                                                                                        project_id = self.project.id,

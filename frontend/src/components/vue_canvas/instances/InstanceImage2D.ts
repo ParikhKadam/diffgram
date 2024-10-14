@@ -10,11 +10,14 @@ export abstract class InstanceImage2D extends Instance {
   public canvas_transform: ImageCanvasTransform;
   public canvas_element: HTMLCanvasElement
   public strokeColor: string = 'black';
+  public line_width: number = 4;
   public fillColor: string = 'white';
   public image_label_settings: ImageLabelSettings
   public is_moving: boolean = false;
   protected is_actively_drawing: boolean = false;
+  protected has_changed: boolean = false;
   public canvas_mouse_tools: CanvasMouseTools;
+  private previous_label_file_id: number = undefined;
 
   public get_canvas_transform(): ImageCanvasTransform {
     return this.canvas_transform
@@ -47,11 +50,17 @@ export abstract class InstanceImage2D extends Instance {
 
   public set_color_from_label() {
 
+    if (this.previous_label_file_id == this.label_file_id) { return }
+
     let colour = this.get_label_file_colour_map()[this.label_file_id]
+
     if (colour) {
       this.set_border_color(colour.hex)
       this.set_fill_color(colour.rgba.r, colour.rgba.g, colour.rgba.b, 0.1)
+      this.previous_label_file_id = this.label_file_id // cache for speed
     }
+
+    return true
   }
 
   public set_border_color(colorHex: string) {
@@ -62,10 +71,14 @@ export abstract class InstanceImage2D extends Instance {
     this.fillColor = "rgba(" + r + "," + g + "," + b + "," + a + ")";
   }
 
-  protected grab_color_from_instance(ctx: CanvasRenderingContext2D) {
-    ctx.fillStyle = this.fillColor
-    ctx.strokeStyle = this.strokeColor
+  protected get_color_from_instance(ctx: CanvasRenderingContext2D) {
 
+    if(this.fillColor != ctx.fillStyle){
+      ctx.fillStyle = this.fillColor
+    }
+    if(this.strokeColor != ctx.strokeStyle){
+      ctx.strokeStyle = this.strokeColor
+    }
   }
 
   public set_canvas(val: HTMLCanvasElement) {

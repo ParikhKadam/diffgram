@@ -26,6 +26,16 @@ const routerOptions = [
     meta: {requiresAuth: true}
   },
   {
+    path: '/admin/queue/status',
+    component: 'diffgram/admin_queue_status',
+    meta: {requiresAuth: true}
+  },
+  {
+    path: '/admin/logo',
+    component: 'diffgram/admin_set_logo',
+    meta: {requiresAuth: true}
+  },
+  {
     path: '/admin/mock',
     component: 'diffgram/admin_mock_data',
     meta: {requiresAuth: true}
@@ -119,14 +129,6 @@ const routerOptions = [
   {
     path: '/project/:project_string_id/workflow/list',
     component: 'action/workflow_list',
-    props: true,
-    meta: {requiresAuth: true}
-  },
-
-  {
-    // :flow_id is optional?
-    path: '/project/:project_string_id/flow/:flow_id?',
-    component: 'action/action_flow',
     props: true,
     meta: {requiresAuth: true}
   },

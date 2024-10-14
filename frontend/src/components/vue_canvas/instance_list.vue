@@ -187,6 +187,7 @@
           this.is_mouse_in_path_issue(ctx, region, i, issue)
         },
         draw_issues_markers(ctx){
+
           if(!this.$props.issues_list || this.$props.issues_list.length === 0){
             return
           }
@@ -254,6 +255,7 @@
 
         },
 
+
         // MAIN function
         draw: function (ctx, done) {
           if (this.show_annotations != true) {
@@ -269,10 +271,16 @@
 
 
           // MAIN loop
+          ctx.textAlign = "start";
+          ctx.setLineDash([0])
 
-          for (var i in this.instance_list) {
+
+          // var startTime = performance.now();
+          for (var i in this.instance_list) {	
             this.draw_single_instance(ctx, i)
           }
+          // var endTime = performance.now();
+          // console.log("Instance List Draw Execution time: " + (endTime - startTime) + " milliseconds.");
 
           this.draw_issues_markers(ctx);
 
@@ -291,6 +299,10 @@
             return false
           }
           if(instance.hidden){
+            return false
+          }
+
+          if(instance.in_viewport == false){
             return false
           }
 
@@ -410,9 +422,6 @@
             }
           } else {
 
-            // good to have defaults here
-            // in case something wacky with if (exists) logic
-
             if (this.mode == 'gold_standard') {
               strokeColor = "#FFD700"
             }
@@ -471,6 +480,7 @@
         },
 
         draw_single_instance: function (ctx, i) {
+
           var instance = this.instance_list[i]
 
           let result = this.draw_single_instance_limits(instance, i)
@@ -478,25 +488,15 @@
             return
           }
 
-          // note this is a convience function for toher things that test falsyness
-          // may nto need it, but that's why it's here and not in limits
-          // (glancing at it looks like it's a return thing but it's not.)
+ 
           if (instance.selected == undefined){
             instance.selected = false
           }
-          // TODO review this.colour isolation here
-
-
-          ctx.textAlign = "start";
           // WIP , restrict movement to center point only
           //draw_circle(instance, instance.x_min + instance.width/2, instance.y_min + instance.height/2, ctx)
 
-
-
           const color_data = this.color_instance(instance, ctx)
 
-          // TODO abstract to function ie for use with other "screen
-          // rendered types" like polygon
           if (instance.rating) {
             for (let rating_index = 0; rating_index < instance.rating; rating_index++) {
               let x = instance.x_min + (rating_index * 35)
@@ -506,6 +506,7 @@
           if (instance.type == "box") {
             let box: BoxInstance = instance as BoxInstance
             box.draw(ctx)
+            return
           }
 
           else if (["polygon"].includes(instance.type)) {
@@ -568,24 +569,11 @@
 
           }
 
-          // TODO we may want to add the edit circle things
-          // (right now the stroke goes over the fill and it looks funny)
-
-          // TODO maybe could be a fancier highlight method
-          // ie maybe rect plus shaded or something
-          // ie https://stackoverflow.com/questions/10487882/html5-change-opacity-of-a-draw-rectangle
           ctx.stroke()
           // Reset line width after drawing.
           ctx.lineWidth = '2'
-            /*
-            if (this.instance_focused_index != undefined) {
-              if (instance.id === this.instance_focused_index) {
-                ctx.strokeStyle = "blue"
-              }
-            }
-            */
 
-           this.draw_icons(instance, ctx)
+         this.draw_icons(instance, ctx)
 
         },
 

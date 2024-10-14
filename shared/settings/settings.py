@@ -1,21 +1,24 @@
 import os
 import logging
 from .env_adapter import EnvAdapter
+import traceback
 
 env_adapter = EnvAdapter()
 
-# To read more about Environment Variables and settings in Diffgram visit:
-# https://diffgram.com/docs/settings-environment-variables-and-secrets
+DOCKER_CONTEXT = env_adapter.bool(os.getenv('DOCKER_CONTEXT', False))
 
-# Secrets are always loaded from Environment Variables
-# However, those can be set by another program, or loaded from another source
-# Here is one example of loading them from a python file first before settings load.
-try:
-    from shared.settings.secrets import *
-except Exception as e:
-    print('Error loading secrets: ')
-    print(e)
 
+def load_local_dev_env():
+    if DOCKER_CONTEXT is True:
+        return
+
+    try:
+        from dotenv import load_dotenv, find_dotenv
+        load_dotenv(find_dotenv('.env'))  # replace with your specific .env file
+    except Exception as e:
+        print(traceback.format_exc())
+
+load_local_dev_env()
 
 # Main Settings
 DIFFGRAM_SYSTEM_MODE = os.environ.get('DIFFGRAM_SYSTEM_MODE', 'sandbox')
@@ -38,15 +41,6 @@ INTER_SERVICE_SECRET = os.environ.get('INTER_SERVICE_SECRET', 'default_inter_ser
 FERNET_KEY = os.getenv('FERNET_KEY', 'NeL_RED6zZ1XF3XT7Yd1hzFPYyebrg6UdkECTOLHEdI=')
 
 
-# Logger Settings - Defaults to INFO
-# CRITICAL = 50
-# FATAL = CRITICAL
-# ERROR = 40
-# WARNING = 30
-# WARN = WARNING
-# INFO = 20
-# DEBUG = 10
-# NOTSET = 0
 SANDBOX_LOGGER_TYPE = int(os.getenv('SANDBOX_LOGGER_TYPE', logging.INFO))
 
 
@@ -88,6 +82,7 @@ PROJECT_INSTANCES_IMAGES_BASE_DIR = "projects/instances/images/"
 ACTIONS_BASE_DIR = "actions/"
 USER_IMAGES_BASE_DIR = "users/images/"
 EXPORT_DIR = "export/"
+SYSTEM_DATA_BASE_DIR = "diffgram-system/"
 
 # Email Settings
 DEFAULT_ENGINEERING_EMAIL = os.environ.get('DEFAULT_ENGINEERING_EMAIL', "")
@@ -114,7 +109,7 @@ PROCESS_MEDIA_ENQUEUE_LOCALLY_IMMEDIATELY = env_adapter.bool(os.environ.get('PRO
                                                                             False))  # default False because generally for production we don't want it
 
 # Eventhub Settings
-EVENTHUB_URL = os.getenv('EVENTHUB_URL', 'https://diffgram.com/api/walrus/eventhub/new')
+EVENTHUB_URL = os.getenv('EVENTHUB_URL', 'https://app.diffgram.com/api/walrus/eventhub/new')
 ALLOW_EVENTHUB = env_adapter.bool(os.environ.get('ALLOW_EVENTHUB', False))
 
 # Stripe
@@ -130,6 +125,7 @@ _ANALYTICS_WRITE_KEY = os.environ.get('_ANALYTICS_WRITE_KEY')
 SANDBOX_BYPASS_LOGIN = env_adapter.bool(os.getenv('SANDBOX_BYPASS_LOGIN', False))  # True or False
 URL_SIGNED_REFRESH = int(os.getenv('URL_SIGNED_REFRESH', 1652572935))
 ML_JOB_DIR = "job/"
+DOCKER_COMPOSE_CONTEXT = env_adapter.bool(os.getenv('DOCKER_COMPOSE_CONTEXT', False))  # True or False
 
 
 # Security
@@ -168,6 +164,7 @@ ACTION_THREAD_SLEEP_TIME_MAX = 300
 DIFFGRAM_ERROR_SEND_TRACES_IN_RESPONSE = env_adapter.bool(os.getenv('DIFFGRAM_ERROR_SEND_TRACES_IN_RESPONSE', False))
 
 # System Info
+ONLY_SUPER_ADMINS_CREATE_PROJECTS = env_adapter.bool(os.getenv('ONLY_SUPER_ADMINS_CREATE_PROJECTS', False))
 DIFFGRAM_INSTALL_FINGERPRINT = os.getenv('DIFFGRAM_INSTALL_FINGERPRINT')
 DIFFGRAM_VERSION_TAG = os.getenv('DIFFGRAM_VERSION_TAG')
 DIFFGRAM_HOST_OS = os.getenv('DIFFGRAM_HOST_OS')

@@ -156,8 +156,6 @@ class AndExpression:
     def __init__(self, expression_list: List[CompareExpression]):
         self.expression_list = expression_list
         self.sql_and_statement = and_(*expression_list)
-        print(len(expression_list), "LEEEEND")
-        print('sql and statement', self.sql_and_statement)
 
     def add_expression(self, selectable_expr_elm: Selectable):
         self.expression_list.append(selectable_expr_elm)
@@ -171,9 +169,17 @@ class OrExpression:
     def __init__(self, expression_list: List[AndExpression]):
         self.expression_list = expression_list
         sql_and_statements = [x.sql_and_statement for x in self.expression_list]
-        self.sql_or_statement = or_(*sql_and_statements)
+        if len(self.expression_list) == 0:
+            self.sql_or_statement = or_(True)
+        else:
+
+            self.sql_or_statement = or_(*sql_and_statements)
 
     def add_expression(self, selectable_expr_elm: AndExpression):
         self.expression_list.append(selectable_expr_elm)
         sql_and_statements = [x.sql_and_statement for x in self.expression_list]
-        self.sql_or_statement = or_(*sql_and_statements)
+        if len(self.expression_list) == 0:
+            self.sql_or_statement = or_(True)
+        else:
+
+            self.sql_or_statement = or_(*sql_and_statements)

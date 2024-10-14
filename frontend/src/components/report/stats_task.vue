@@ -83,8 +83,6 @@
 </template>
 
 <script lang="ts">
-
-import pieChart from "../report/charts/pieChart";
 import axios from '../../services/customInstance';
 import Vue from "vue";
 import task_time_spent from "./task_time_spent.vue";
@@ -190,7 +188,7 @@ export default Vue.extend({
         this.errors = null
         this.result = null
 
-        axios.post('/api/v1/diffgram/stats/task',
+        axios.post(`/api/v1/project/${this.project_string_id}/stats/task`,
           {
             'date_from': this.date.from,
             'date_to': this.date.to,

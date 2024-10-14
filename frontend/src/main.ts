@@ -11,10 +11,6 @@ import vue2Dropzone from 'vue2-dropzone'
 import './css/vue_dropzone.css'
 
 
-
-// Look into https://vuejs.org/v2/guide/mixins.html#Global-Mixin
-// for say that api error handling thing
-
 /**
  *
  *  NOTE we only need to import things here
@@ -26,6 +22,7 @@ import './css/vue_dropzone.css'
  *
  */
 
+// Vue.config.performance = true
 import file_preview from './components/source_control/file_preview'
 Vue.component('file_preview', file_preview)
 
@@ -218,14 +215,16 @@ import VueQriously from 'vue-qriously'
 Vue.use(VueQriously)
 
 Vue.config.productionTip = false
-
+import CronVuetify from '@vue-js-cron/vuetify'
+import '@vue-js-cron/vuetify/dist/vuetify.css'
+Vue.use(CronVuetify)
 // This is the "Full" install as we bring in vuetify
 // and the full css file
 // and pass the options straight in.
 
 import Vuetify from 'vuetify'
 import '@mdi/font/css/materialdesignicons.css'
-import './css/vuetify-v2.4.7.min.css'
+import './css/vuetify-v2.7.0.min.css'
 import './css/custom_changes.css'
 import './css/mxgraph.css'
 

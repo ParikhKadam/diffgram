@@ -25,6 +25,13 @@ ui_schema_button_spec_list = [
     }
     }
 ]
+custom_buttons_spec_list = [
+    {'buttons_list': {
+        'kind': list,
+        'required': False
+    }
+    },
+]
 
 ui_schema_label_settings_spec_list = [
     {"visible": {
@@ -79,6 +86,7 @@ all_ui_schema_specs = {
     'hotkeys': ui_schema_button_spec_list,
     'overflow_menu': ui_schema_button_spec_list,
     'settings': ui_schema_button_spec_list,
+    'custom_buttons': custom_buttons_spec_list,
 
     'attributes': ui_schema_button_spec_list,
     'instances': ui_schema_button_spec_list,

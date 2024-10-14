@@ -90,6 +90,7 @@ class DiffgramInstallTool:
 
     def set_gcp_credentials(self):
         is_valid = False
+        self.use_docker_minio = False
         # Ask For Service Account
         while not is_valid:
             f = None
@@ -250,7 +251,7 @@ class DiffgramInstallTool:
         return True
 
     def validate_s3_connection(self):
-        if not self.use_docker_minio:
+        if not self.use_docker_minio or self.static_storage_provider == 'aws':
             endpoint_url = self.s3_endpoint_url
         else:
             endpoint_url = 'http://localhost:9000'
@@ -268,9 +269,9 @@ class DiffgramInstallTool:
                                       aws_access_key_id=access_id, aws_secret_access_key=access_secret, region_name=bucket_region)
             else:
                 client = boto3.client('s3', endpoint_url=endpoint_url, aws_access_key_id=access_id, aws_secret_access_key=access_secret, region_name=bucket_region)
-            print(f"{bcolors.OKGREEN}[OK] {bcolors.ENDC}Connection To S3 Account")
+            print(f"{bcolors.OKGREEN}[OK] {bcolors.ENDC}Connection To Storage")
         except Exception as e:
-            print(f"{bcolors.FAIL}[ERROR] {bcolors.ENDC}Connection To S3 Account")
+            print(f"{bcolors.FAIL}[ERROR] {bcolors.ENDC}Connection To Storage")
             bcolors.printcolor('Error Connecting to S3: Please check you entered valid credentials.', bcolors.FAIL)
             print(f"Details: {traceback.format_exc()}")
             bcolors.printcolor('Please update credentials and try again', bcolors.OKBLUE)
@@ -284,7 +285,7 @@ class DiffgramInstallTool:
             print(f"{bcolors.OKGREEN}[OK] {bcolors.ENDC}Write Permissions")
         except:
             print(f"{bcolors.FAIL}[ERROR] {bcolors.ENDC}Write Permissions")
-            bcolors.printcolor('Error Connecting to S3: Please check you have write permissions on the S3 bucket.',
+            bcolors.printcolor('Error Connecting to storage bucket: Please check you have write permissions on the bucket.',
                                bcolors.FAIL)
             print(f"Details: {traceback.format_exc()}")
             bcolors.printcolor('Please update permissions and try again', bcolors.OKBLUE)
@@ -432,7 +433,7 @@ class DiffgramInstallTool:
     def set_azure_credentials(self):
         # Ask For Access Key ID
         is_valid = False
-
+        self.use_docker_minio = False
         while not is_valid:
             azure_connection_string = bcolors.inputcolor('Please provide the Azure Connection String: ')
             if azure_connection_string == '':
@@ -472,7 +473,6 @@ class DiffgramInstallTool:
             env_file = f"GCP_SERVICE_ACCOUNT_FILE_PATH={self.gcp_credentials_path}\n"
             env_file += f"CLOUD_STORAGE_BUCKET={self.bucket_name}\n"
             env_file += f"ML__CLOUD_STORAGE_BUCKET={self.bucket_name}\n"
-            env_file += 'SAME_HOST=False\n'
             env_file += f"DIFFGRAM_STATIC_STORAGE_PROVIDER={self.static_storage_provider}\n"
         elif self.static_storage_provider == 'aws':
             env_file = f"DIFFGRAM_AWS_ACCESS_KEY_ID={self.s3_access_id}\n"
@@ -481,7 +481,6 @@ class DiffgramInstallTool:
             env_file += f"DIFFGRAM_S3_BUCKET_REGION={self.bucket_region}\n"
             env_file += f"IS_DIFFGRAM_S3_V4_SIGNATURE={self.is_aws_signature_v4}\n"
             env_file += f"ML__DIFFGRAM_S3_BUCKET_NAME={self.bucket_name}\n"
-            env_file += 'SAME_HOST=False\n'
             env_file += f"DIFFGRAM_STATIC_STORAGE_PROVIDER={self.static_storage_provider}\n"
             env_file += "GCP_SERVICE_ACCOUNT_FILE_PATH=/dev/null\n"
         elif self.static_storage_provider == 'minio':
@@ -492,14 +491,12 @@ class DiffgramInstallTool:
             env_file += f"DIFFGRAM_S3_BUCKET_REGION={self.bucket_region}\n"
             env_file += f"IS_DIFFGRAM_S3_V4_SIGNATURE={True}\n"
             env_file += f"ML__DIFFGRAM_S3_BUCKET_NAME={self.bucket_name}\n"
-            env_file += 'SAME_HOST=False\n'
             env_file += f"DIFFGRAM_STATIC_STORAGE_PROVIDER={self.static_storage_provider}\n"
             env_file += "GCP_SERVICE_ACCOUNT_FILE_PATH=/dev/null\n"
         elif self.static_storage_provider == 'azure':
             env_file = f"DIFFGRAM_AZURE_CONNECTION_STRING={self.azure_connection_string}\n"
             env_file += f"DIFFGRAM_AZURE_CONTAINER_NAME={self.bucket_name}\n"
             env_file += f"ML__DIFFGRAM_AZURE_CONTAINER_NAME={self.bucket_name}\n"
-            env_file += 'SAME_HOST=False\n'
             env_file += f"DIFFGRAM_STATIC_STORAGE_PROVIDER={self.static_storage_provider}\n"
             env_file += "GCP_SERVICE_ACCOUNT_FILE_PATH=/dev/null\n"
 
@@ -527,14 +524,16 @@ class DiffgramInstallTool:
         env_file += f"RABBITMQ_PORT={self.rabbit_port}\n"
 
         if self.local_database:
-            env_file += "POSTGRES_IMAGE=postgres:12.5\n"
+            env_file += "POSTGRES_IMAGE=postgres:16\n"
             env_file += "DATABASE_URL=postgresql+psycopg2://postgres:postgres@db/diffgram\n"
             env_file += "DATABASE_NAME=diffgram\n"
             env_file += "DATABASE_HOST=db\n"
             env_file += "DATABASE_NAME=diffgram\n"
             env_file += "DATABASE_USER=postgres\n"
             env_file += "DATABASE_PASS=postgres\n"
-
+            env_file += "HEALTHCHECK_TEST_COMMAND=pg_isready\n"
+            env_file += "HEALTHCHECK_TEST_ARG_0=-d\n"
+            env_file += "HEALTHCHECK_TEST_ARG_1=db_prod\n"
         else:
             env_file += "POSTGRES_IMAGE=tianon/true\n"
             env_file += f"DATABASE_URL={self.database_url}\n"
@@ -542,6 +541,9 @@ class DiffgramInstallTool:
             env_file += f"DATABASE_NAME={self.db_name}\n"
             env_file += f"DATABASE_USER={self.db_username}\n"
             env_file += f"DATABASE_PASS={self.db_pass}\n"
+            env_file += "HEALTHCHECK_TEST_COMMAND=echo\n"
+            env_file += "HEALTHCHECK_TEST_ARG_0=remote_db_in_use\n"
+            env_file += "HEALTHCHECK_TEST_ARG_1=none\n"
 
         if self.mailgun:
             env_file += f"MAILGUN_KEY={self.mailgun_key}\n"
@@ -562,7 +564,7 @@ class DiffgramInstallTool:
             if self.static_storage_provider == 'minio':
                 os.system('docker compose --profile minio up -d')
             else:
-                os.system('docker-compose up -d')
+                os.system('docker compose up -d')
             print('✓ Diffgram Successfully Launched!')
             print('View the Web UI at: http://localhost:8085')
         except Exception as e:
@@ -571,9 +573,7 @@ class DiffgramInstallTool:
     def set_diffgram_version(self):
         version = bcolors.inputcolor('Enter diffgram version: [Or Press Enter to Get The Latest Version]: ')
         if version == "":
-            response = requests.get("https://api.github.com/repos/diffgram/diffgram/releases/latest")
-            latest_release = response.json()['tag_name']
-            self.diffgram_version = latest_release
+            self.diffgram_version = 'latest'
         else:
             self.diffgram_version = version
 

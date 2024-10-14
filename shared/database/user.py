@@ -137,10 +137,10 @@ class User(Base):
     follow_ing_count = Column(Integer, default = 0)  # ADD to db
     follow_ers_count = Column(Integer, default = 0)
 
-    follow_ing_list = relationship("UserFollow",
-                                   foreign_keys = "UserFollow.user_id")
-    follow_ers_list = relationship("UserFollow",
-                                   foreign_keys = "UserFollow.following_user_id")
+    # follow_ing_list = relationship("UserFollow",
+    #                                foreign_keys = "UserFollow.user_id")
+    # follow_ers_list = relationship("UserFollow",
+    #                                foreign_keys = "UserFollow.following_user_id")
 
     # See builder_signup.py
     signup_role = Column(String())  # ie [leadership, product, engineering, student, other]
@@ -151,6 +151,17 @@ class User(Base):
     default_plan = relationship(Plan,
                                 foreign_keys = [default_plan_id])
 
+
+    def is_support_user(self):
+        try:
+            domain_name = self.email.split('@')[1]
+        except:
+            domain_name = None
+        if domain_name == 'diffgram.com':
+            return True
+
+        return False
+    
     def bind_to_oidc_login(self, session, oidc_id):
         self.oidc_id = oidc_id
         session.add(self)
@@ -298,6 +309,10 @@ class User(Base):
 
         return session.query(User).filter(User.username == username_string).first()
 
+
+    def get_roles_in_project(self, project_string_id):
+        roles = self.permissions_projects.get(project_string_id)
+        return roles
     @staticmethod
     def get_current_user(session):
 

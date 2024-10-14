@@ -14,9 +14,11 @@ from sqlalchemy import desc
 from shared.query_engine.query_creator import QueryCreator
 from shared.query_engine.sqlalchemy_query_exectutor import SqlAlchemyQueryExecutor
 import math
+from flasgger import swag_from
 from shared.database.source_control.file_perms import FilePermissions
 @routes.route('/api/v1/file/view',
               methods = ['POST'])
+@swag_from('../../../docs/files/file_view.yml')
 def view_file_by_id():  # Assumes permissions handled later with Project_permissions
     """
 
@@ -136,6 +138,10 @@ def view_file_diff(project_string_id, file_id):
               methods = ['GET', 'POST'])
 @Permission_Task.by_task_id(apis_user_list = ["builder_or_trainer"])
 def task_get_annotation_list_api(task_id):
+    spec_list = [{'task_child_file_id': {'type': int, 'required': False}}]
+
+    log, input, untrusted_input = regular_input.master(request = request,
+                                                       spec_list = spec_list)
     with sessionMaker.session_scope() as session:
         task = Task.get_by_id(session = session,
                               task_id = task_id)
@@ -143,8 +149,11 @@ def task_get_annotation_list_api(task_id):
         # TODO Review the function get_annotations_common()
         # which assummes we need to check file permissions still,
         # ie (via project) where as here we don't...
+        file = task.file
+        if input is not None and input.get('task_child_file_id'):
+            file = File.get_by_id(session = session, file_id = input.get('task_child_file_id'))
 
-        file_serialized = task.file.serialize_with_annotations(session = session)
+        file_serialized = file.serialize_with_annotations(session = session)
 
         return jsonify(success = True,
                        file_serialized = file_serialized), 200
@@ -458,6 +467,7 @@ class File_Browser():
         self.metadata = {}
 
         self.metadata['job_id'] = self.metadata_proposed.get("job_id", None)
+        self.metadata['with_children_files'] = self.metadata_proposed.get("with_children_files", False)
         self.metadata['issues_filter'] = self.metadata_proposed.get("issues_filter", None)
 
         self.metadata['file'] = {}
@@ -544,7 +554,7 @@ class File_Browser():
         if media_type:
             media_type_query = media_type.lower()
         if media_type in ["All", None]:
-            media_type_query = ["image", "video", "text", "sensor_fusion", "geospatial", "audio", "compound"]
+            media_type_query = ["image", "video", "text", "sensor_fusion", "geospatial", "audio", "compound", "compound/conversational"]
 
         if media_type in ['Image', 'image']:
             media_type_query = "image"
@@ -677,6 +687,7 @@ class File_Browser():
                 resp = jsonify(log=self.log)
                 resp.status = 401
                 raise Unauthorized(response = resp)
+
             query, count = WorkingDirFileLink.file_list(
                 session = self.session,
                 working_dir_id = self.directory.id,
@@ -696,7 +707,9 @@ class File_Browser():
                 job_id = job_id,
                 has_some_machine_made_instances = has_some_machine_made_instances,
                 ignore_id_list = ignore_id_list,
-                count_before_limit = True
+                count_before_limit = True,
+                include_children_compound = self.metadata['with_children_files']
+
             )
 
             file_count += count

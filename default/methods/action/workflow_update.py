@@ -1,7 +1,8 @@
 from methods.regular.regular_api import *
 from shared.database.action.action import Action
 from shared.database.action.workflow import Workflow
-
+from flasgger import swag_from
+from shared.scheduler.job_scheduling import remove_job_scheduling, add_job_scheduling
 
 @routes.route('/api/v1/project/<string:project_string_id>' +
               '/actions/workflow/update',
@@ -9,11 +10,13 @@ from shared.database.action.workflow import Workflow
 @Project_permissions.user_has_project(
     Roles = ["admin", "Editor"],
     apis_user_list = ['api_enabled_builder', 'security_email_verified'])
-@limiter.limit("20 per day")
+@limiter.limit("2000 per day")
+@swag_from('../../docs/actions/workflow_update.yml')
 def api_workflow_update(project_string_id):
     """
-    TODO maybe prefer to pass whole flow object?
-
+        Updates the given workflow.
+    :param project_string_id:
+    :return:
     """
 
     spec_list = [
@@ -76,6 +79,7 @@ def flow_update_core(
     if mode == "ARCHIVE":
         workflow.archived = True
         workflow.active = False
+        remove_job_scheduling(workflow_id = workflow.id, project_id = workflow.project_id)
         session.add(workflow)
 
         return log
@@ -87,6 +91,14 @@ def flow_update_core(
 
         workflow.name = name
         workflow.active = active
+        if not workflow.active and workflow.has_time_trigger(session = session):
+            remove_job_scheduling(workflow_id = workflow.id, project_id = workflow.project_id)
+        else:
+            if workflow.has_time_trigger(session = session):
+                first_action = workflow.get_first_action(session = session)
+                add_job_scheduling(workflow_id = workflow.id,
+                                   project_id = workflow.project_id,
+                                   cron_expression = first_action.trigger_data.get('cron_expression', None))
         workflow.time_window = time_window
         workflow.member_updated = member
 
